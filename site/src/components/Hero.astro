@@ -1,0 +1,243 @@
+---
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { LINKS } from '../data/content.ts';
+
+const mobileFile = 'hero-mobile.mp4';
+const hasMobile = existsSync(fileURLToPath(new URL(`../../public/video/${mobileFile}`, import.meta.url)));
+const demoHref = LINKS.video ?? '#moments';
+const appHref = LINKS.app ?? '/demo';
+---
+
+<section class="hero" aria-labelledby="hero-title" data-hero>
+  <canvas
+    class="canvas"
+    data-hero-canvas
+    role="img"
+    aria-label="Volume rendering of a real abdominal CT. A cutting plane sweeps through the right flank, exposing the liver, a tumour in red, and a hepatic vessel that brightens as the cut approaches it."
+  ></canvas>
+
+  <div class="mobile" aria-hidden="true">
+    {
+      hasMobile ? (
+        <video src={`/video/${mobileFile}`} muted playsinline loop autoplay preload="metadata" />
+      ) : (
+        <div class="pending">
+          <span class="label">Asset pending: {mobileFile}</span>
+        </div>
+      )
+    }
+  </div>
+
+  <p class="loading label mono" data-hero-loading aria-live="polite">LOADING VOLUME 0%</p>
+
+  <div class="cam" aria-hidden="true">
+    <video id="cam" playsinline muted></video>
+    <canvas id="camoverlay"></canvas>
+  </div>
+
+  <div class="wrap grid copy">
+    <div class="text">
+      <p class="label">HackNC 2026 · Surgical planning</p>
+      <h1 class="display" id="hero-title">Put your hand through the patient.</h1>
+      <p class="sub">Touchless 3D planning from a laptop webcam. No headset, no sterile break.</p>
+      <p class="links">
+        <a href={appHref}>Try it live <span aria-hidden="true">→</span></a>
+        <a href={demoHref}>Watch the 90-second demo</a>
+      </p>
+    </div>
+    <div class="hand">
+      <button type="button" class="hand-btn" data-hand-button hidden>Use your hand</button>
+      <p class="note" data-hand-note aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { mountHero } from '../scripts/hero/hero.ts';
+
+  const root = document.querySelector<HTMLElement>('[data-hero]')!;
+  const wide = matchMedia('(min-width: 1024px)').matches;
+  const gl = !!document.createElement('canvas').getContext('webgl2');
+  if (wide && gl) {
+    root.dataset.webgl = '';
+    void mountHero(root);
+  }
+</script>
+
+<style>
+  .hero {
+    position: relative;
+    height: 100vh;
+    height: 100svh;
+    min-height: 36rem;
+    overflow: hidden;
+    /* The signature: the torso lies in the pool of light under an overhead
+       surgical lamp. Centred where the renderer draws the body (its view is
+       shifted 24 % right), and the only gradient on the page besides the
+       falloff into the copy below. */
+    background: radial-gradient(ellipse 42% 58% at 72% 44%, var(--lamp) 0%, var(--bg-raise) 48%, var(--bg) 100%);
+  }
+
+  .canvas,
+  .mobile {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .canvas {
+    display: none;
+  }
+  .hero[data-webgl] .canvas {
+    display: block;
+  }
+  .hero[data-webgl] .mobile {
+    display: none;
+  }
+  .mobile video,
+  .pending {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--frame);
+  }
+  /* Upper third, clear of the copy that sits over the bottom of the hero. */
+  .pending {
+    display: grid;
+    place-items: start center;
+    padding-top: 30vh;
+  }
+
+  /* The render's own falloff into the page is the only gradient on the site:
+     it keeps the copy legible where the torso passes behind it. */
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 45%;
+    background: linear-gradient(to top, var(--bg), transparent);
+    pointer-events: none;
+  }
+
+  .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-dim);
+    margin: 0;
+    display: none;
+  }
+  .hero[data-webgl]:not([data-ready]) .loading {
+    display: block;
+  }
+
+  .copy {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 2;
+    padding-bottom: clamp(2rem, 6vh, 4.5rem);
+    align-items: end;
+  }
+  .text {
+    grid-column: 1 / span 7;
+    display: grid;
+    gap: var(--s-3);
+  }
+  .display {
+    max-width: 11ch;
+  }
+  .sub {
+    color: var(--text-dim);
+    font-size: var(--fs-20);
+    max-width: 44ch;
+  }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    font-size: var(--fs-16);
+    color: var(--text);
+  }
+  .links a {
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.3em;
+    transition: text-decoration-color var(--dur-short) var(--ease-in);
+  }
+  .links a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .hand {
+    grid-column: 9 / span 4;
+    justify-self: end;
+    text-align: right;
+    display: grid;
+    gap: var(--s-1);
+  }
+  .hand-btn {
+    justify-self: end;
+    font-family: var(--font-display);
+    font-size: var(--fs-14);
+    color: var(--text);
+    padding: 0.7rem 1rem;
+    border: var(--hair);
+    border-color: var(--text-faint);
+    border-radius: var(--radius);
+    transition: border-color var(--dur-short) var(--ease-in);
+  }
+  .hand-btn:hover {
+    border-color: var(--text-dim);
+  }
+  .hand-btn:disabled {
+    color: var(--text-faint);
+    cursor: progress;
+  }
+  .note {
+    font-family: var(--font-display);
+    font-size: var(--fs-14);
+    color: var(--text-faint);
+    min-height: 1.4em;
+    max-width: 32ch;
+  }
+
+  .cam {
+    position: absolute;
+    top: 5rem;
+    right: var(--edge);
+    width: 160px;
+    aspect-ratio: 4 / 3;
+    z-index: 3;
+    display: none;
+    border: var(--hair);
+    background: var(--frame);
+  }
+  .hero[data-hand] .cam {
+    display: block;
+  }
+  .cam video,
+  .cam canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .cam video {
+    transform: scaleX(-1);
+    opacity: 0.55;
+  }
+
+  @media (max-width: 1023px) {
+    .text {
+      grid-column: 1 / -1;
+    }
+    .hand {
+      display: none;
+    }
+  }
+</style>

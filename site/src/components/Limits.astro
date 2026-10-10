@@ -1,0 +1,46 @@
+---
+import { LIMITS } from '../data/content.ts';
+---
+
+<section class="section" aria-labelledby="limits-label">
+  <div class="wrap grid">
+    <div class="side">
+      <h2 class="h3" id="limits-label">Limits</h2>
+    </div>
+    <ul class="list">
+      {LIMITS.map((l) => <li>{l}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .side {
+    grid-column: 1 / span 4;
+  }
+  .list {
+    grid-column: 6 / span 7;
+    font-size: var(--fs-14);
+    color: var(--text-dim);
+    border-top: var(--hair);
+    align-self: end;
+  }
+  .list li {
+    padding-block: 1rem;
+    border-bottom: var(--hair);
+    display: grid;
+    grid-template-columns: 2ch 1fr;
+  }
+  .list li::before {
+    content: '·';
+    color: var(--text-faint);
+  }
+  @media (max-width: 900px) {
+    .side,
+    .list {
+      grid-column: 1 / -1;
+    }
+    .list {
+      margin-top: var(--s-4);
+    }
+  }
+</style>

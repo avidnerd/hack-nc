@@ -1,0 +1,110 @@
+---
+import Footer from '../components/Footer.astro';
+import Formulas from '../components/Formulas.astro';
+import Limits from '../components/Limits.astro';
+import Nav from '../components/Nav.astro';
+import Base from '../layouts/Base.astro';
+
+const stages = [
+  {
+    name: 'Pipeline',
+    where: 'pipeline/run.py · Python, offline',
+    text: 'An open CT from the Medical Segmentation Decathlon is resampled, windowed to one byte per voxel, and packed with its liver and tumour labels plus TotalSegmentator vessels, kidneys and aorta. The aorta mask is skeletonized into a centerline with a lumen radius every 2 mm. numpy computes ground-truth numbers for fixed test planes.',
+  },
+  {
+    name: 'Rendering',
+    where: 'src/render/shaders/raymarch.frag.glsl',
+    text: 'A ray-marcher we wrote in GLSL walks each pixel through the CT and the label volume together. Labels set colour and opacity independently of the CT window, so the tumour stays visible inside a translucent liver. The cutting plane discards one side and lights a 1.6 mm band on the cut face. The hero on this site runs the same shader.',
+  },
+  {
+    name: 'Hands',
+    where: 'src/input · MediaPipe, 1€ filter, gesture state machine',
+    text: 'MediaPipe HandLandmarker returns 21 landmarks per hand at camera rate, on device. A 1€ filter smooths them, and a second, slower one smooths the plane normal. Poses must hold 150 ms before they act. The palm normal becomes the plane normal; depth comes from hand size relative to when the hand opened.',
+  },
+  {
+    name: 'Planning',
+    where: 'src/planning, src/devices · Web Worker',
+    text: 'Remnant, margin and vessels crossed are voxel counts and distance lookups on the label grid. The tumour distance field is our own separable exact EDT. The optimizer scores 3,751 planes near yours. The stent is a parametric tube along the centerline, judged by four sealing rules.',
+  },
+  {
+    name: 'Voice',
+    where: 'src/voice, src/ai',
+    text: 'Every command starts with the wake word “scrub”. A regex grammar maps the rest to a fixed intent. Only when it misses does an LLM pick from the same closed list, with a 1.5 s timeout. The app runs fully with the LLM off.',
+  },
+];
+---
+
+<Base title="How Scrub+ works" description="Pipeline, renderer, hand tracking, planning engine and voice: how Scrub+ turns a webcam into a planning console.">
+  <Nav />
+  <main>
+    <section class="section intro" aria-labelledby="how-title">
+      <div class="wrap grid">
+        <h1 class="h2 title" id="how-title">How Scrub+ works</h1>
+        <p class="body lede">
+          Nothing spatial leaves the browser. Hand tracking, rendering and every planning number run on the laptop. The
+          network is touched only for the optional language model.
+        </p>
+      </div>
+    </section>
+
+    <section class="stages" aria-label="Architecture">
+      <ol class="wrap">
+        {
+          stages.map((s) => (
+            <li class="grid stage">
+              <div class="head">
+                <h2 class="h3">{s.name}</h2>
+                <p class="label">{s.where}</p>
+              </div>
+              <p class="body text">{s.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <Formulas />
+    <Limits />
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .intro {
+    padding-top: var(--s-30);
+  }
+  .intro .grid {
+    row-gap: var(--s-3);
+  }
+  .title {
+    grid-column: 1 / span 8;
+  }
+  .lede {
+    grid-column: 1 / span 6;
+  }
+  .stages ol {
+    border-top: var(--hair);
+  }
+  .stage {
+    padding-block: var(--s-6);
+    border-bottom: var(--hair);
+    row-gap: var(--s-2);
+  }
+  .head {
+    grid-column: 1 / span 5;
+    display: grid;
+    gap: var(--s-1);
+    align-content: start;
+  }
+  .text {
+    grid-column: 7 / span 6;
+  }
+  @media (max-width: 900px) {
+    .title,
+    .lede,
+    .head,
+    .text {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

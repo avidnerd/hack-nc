@@ -1,0 +1,86 @@
+{
+ "positionsBytes": 3570852,
+ "indicesBytes": 7121832,
+ "meshes": [
+  {
+   "key": "liver",
+   "label": 1,
+   "vertexOffset": 0,
+   "vertexCount": 132418,
+   "indexOffset": 0,
+   "indexCount": 794472
+  },
+  {
+   "key": "tumor",
+   "label": 2,
+   "vertexOffset": 132418,
+   "vertexCount": 10322,
+   "indexOffset": 794472,
+   "indexCount": 61920
+  },
+  {
+   "key": "ivc",
+   "label": 3,
+   "vertexOffset": 142740,
+   "vertexCount": 14520,
+   "indexOffset": 856392,
+   "indexCount": 87108
+  },
+  {
+   "key": "portal_vein",
+   "label": 4,
+   "vertexOffset": 157260,
+   "vertexCount": 8746,
+   "indexOffset": 943500,
+   "indexCount": 52416
+  },
+  {
+   "key": "aorta",
+   "label": 5,
+   "vertexOffset": 166006,
+   "vertexCount": 24212,
+   "indexOffset": 995916,
+   "indexCount": 145260
+  },
+  {
+   "key": "kidney_left",
+   "label": 6,
+   "vertexOffset": 190218,
+   "vertexCount": 23274,
+   "indexOffset": 1141176,
+   "indexCount": 139644
+  },
+  {
+   "key": "kidney_right",
+   "label": 7,
+   "vertexOffset": 213492,
+   "vertexCount": 22284,
+   "indexOffset": 1280820,
+   "indexCount": 133692
+  },
+  {
+   "key": "hepatic_vessels",
+   "label": 8,
+   "vertexOffset": 235776,
+   "vertexCount": 14334,
+   "indexOffset": 1414512,
+   "indexCount": 85716
+  },
+  {
+   "key": "skin",
+   "label": 0,
+   "vertexOffset": 250110,
+   "vertexCount": 23710,
+   "indexOffset": 1500228,
+   "indexCount": 138312
+  },
+  {
+   "key": "bone",
+   "label": 0,
+   "vertexOffset": 273820,
+   "vertexCount": 23751,
+   "indexOffset": 1638540,
+   "indexCount": 141918
+  }
+ ]
+}

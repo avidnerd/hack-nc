@@ -1,0 +1,90 @@
+---
+/**
+ * Three measured numbers, read at build time from ../docs/VALIDATION.json.
+ * Written by ../scripts/validation.ts. A missing file or field shows a dash;
+ * nothing here is typed in by hand.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+
+interface Validation {
+  planeJitterDeg?: number;
+  planeJitterMethod?: string;
+  optimizerMs?: number;
+  optimizerMethod?: string;
+  remnantErrorPct?: number;
+  remnantMethod?: string;
+}
+const path = fileURLToPath(new URL('../../../docs/VALIDATION.json', import.meta.url));
+const v: Validation = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
+
+const fmt = (x: number | undefined, digits: number) => (typeof x === 'number' ? x.toFixed(digits) : null);
+const rows = [
+  { value: fmt(v.planeJitterDeg, 2), unit: '°', what: 'Cut-plane jitter, hand still (std. dev.)', method: v.planeJitterMethod },
+  { value: fmt(v.optimizerMs, 0), unit: 'ms', what: 'Optimize, Moment 3 search', method: v.optimizerMethod },
+  { value: fmt(v.remnantErrorPct, 2), unit: '%', what: 'Remnant error against numpy', method: v.remnantMethod },
+];
+---
+
+<section class="section" aria-labelledby="validation-label">
+  <div class="wrap">
+    <h2 class="h2 title" id="validation-label">How we checked it</h2>
+    <dl class="rows">
+      {
+        rows.map((r) => (
+          <div class="row">
+            <dt class="label">{r.what}</dt>
+            <dd class="num big">
+              {r.value ?? '—'}
+              {r.value && <span class="u">{r.unit}</span>}
+            </dd>
+            <dd class="method">{r.value ? r.method : 'Not measured yet.'}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</section>
+
+<style>
+  .title {
+    margin-bottom: var(--s-12);
+    max-width: 14ch;
+  }
+  .rows {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: var(--gutter);
+    border-top: var(--hair);
+  }
+  .row {
+    display: grid;
+    gap: var(--s-2);
+    padding-top: var(--s-3);
+    align-content: start;
+  }
+  .row + .row {
+    border-left: var(--hair);
+    padding-left: var(--gutter);
+  }
+  .big {
+    font-size: var(--fs-72);
+  }
+  .method {
+    color: var(--text-dim);
+    font-size: var(--fs-14);
+    max-width: 30ch;
+  }
+  @media (max-width: 900px) {
+    .rows {
+      grid-template-columns: 1fr;
+    }
+    .row + .row {
+      border-left: 0;
+      padding-left: 0;
+      border-top: var(--hair);
+      margin-top: var(--s-4);
+    }
+  }
+</style>

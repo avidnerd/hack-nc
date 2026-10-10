@@ -1,0 +1,15 @@
+{
+ "case": "aorta",
+ "shape": [
+  347,
+  246,
+  189
+ ],
+ "spacing": [
+  1.24828,
+  1.25081,
+  1.24868
+ ],
+ "organVolumeMl": 1034.434,
+ "tumorVolumeMl": 0.0
+}

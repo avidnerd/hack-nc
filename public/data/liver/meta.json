@@ -1,0 +1,162 @@
+{
+ "id": "liver",
+ "name": "Liver - MSD Task03 case 36",
+ "kind": "liver",
+ "shape": [
+  455,
+  391,
+  111
+ ],
+ "spacing": [
+  1.0,
+  1.0,
+  1.0
+ ],
+ "origin": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "huRange": [
+  -1000,
+  2000
+ ],
+ "huCurve": [
+  [
+   0,
+   -1000
+  ],
+  [
+   40,
+   -200
+  ],
+  [
+   215,
+   300
+  ],
+  [
+   255,
+   2000
+  ]
+ ],
+ "labels": [
+  {
+   "id": 1,
+   "key": "liver",
+   "name": "Liver",
+   "color": [
+    0.74,
+    0.42,
+    0.36
+   ],
+   "role": "organ"
+  },
+  {
+   "id": 2,
+   "key": "tumor",
+   "name": "Tumour",
+   "color": [
+    1.0,
+    0.36,
+    0.2
+   ],
+   "role": "tumor"
+  },
+  {
+   "id": 3,
+   "key": "ivc",
+   "name": "Inferior vena cava",
+   "color": [
+    0.29,
+    0.62,
+    0.9
+   ],
+   "role": "vessel"
+  },
+  {
+   "id": 4,
+   "key": "portal_vein",
+   "name": "Portal vein",
+   "color": [
+    0.34,
+    0.82,
+    0.78
+   ],
+   "role": "vessel"
+  },
+  {
+   "id": 5,
+   "key": "aorta",
+   "name": "Aorta",
+   "color": [
+    0.93,
+    0.33,
+    0.42
+   ],
+   "role": "vessel"
+  },
+  {
+   "id": 6,
+   "key": "kidney_left",
+   "name": "Left kidney",
+   "color": [
+    0.62,
+    0.55,
+    0.85
+   ],
+   "role": "context"
+  },
+  {
+   "id": 7,
+   "key": "kidney_right",
+   "name": "Right kidney",
+   "color": [
+    0.62,
+    0.55,
+    0.85
+   ],
+   "role": "context"
+  },
+  {
+   "id": 8,
+   "key": "hepatic_vessels",
+   "name": "Hepatic vessel",
+   "color": [
+    0.36,
+    0.74,
+    0.98
+   ],
+   "role": "vessel"
+  }
+ ],
+ "vesselIds": [
+  3,
+  4,
+  5,
+  8
+ ],
+ "windowPresets": {
+  "soft": {
+   "w": 400,
+   "l": 40
+  },
+  "bone": {
+   "w": 1800,
+   "l": 400
+  },
+  "lung": {
+   "w": 1500,
+   "l": -600
+  },
+  "liver": {
+   "w": 150,
+   "l": 30
+  }
+ },
+ "defaultPreset": "soft",
+ "centerline": "aorta",
+ "truth": {
+  "organVolumeMl": 1251.035,
+  "tumorVolumeMl": 39.484
+ }
+}

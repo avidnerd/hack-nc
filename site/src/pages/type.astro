@@ -1,0 +1,69 @@
+---
+// Type specimen for checking the system. Delete before ship (site/CLAUDE.md §7.1). At /type: Astro ignores _-prefixed pages.
+import Wordmark from '../components/Wordmark.astro';
+import Base from '../layouts/Base.astro';
+
+const scale = ['120', '72', '44', '28', '20', '18', '16', '14', '12'];
+const colors = ['bg', 'bg-raise', 'line', 'text', 'text-dim', 'text-faint', 'accent', 'warn', 'danger', 'tissue'];
+---
+
+<Base title="Type specimen" description="Scrub+ type and colour tokens.">
+  <main class="wrap spec">
+    <Wordmark size="large" />
+    <p class="label">Display · Geist 500 · −0.035em</p>
+    {
+      scale.map((s) => (
+        <div class="row">
+          <span class="label">{s}</span>
+          <span style={`font-size: var(--fs-${s}); font-weight: 500; letter-spacing: ${Number(s) >= 44 ? 'var(--track-display)' : 'var(--track-tight)'}; line-height: ${Number(s) >= 44 ? 'var(--lh-display)' : '1.3'}`}>
+            Put your hand through the patient.
+          </span>
+        </div>
+      ))
+    }
+    <p class="label">Mono · Geist Mono · tabular</p>
+    <p class="num" style="font-size: var(--fs-72)">39<span class="u">%</span> 11.3<span class="u">mm</span> 486<span class="u">ms</span></p>
+    <p class="body">
+      Body at 18 px. Planning numbers come from segmentation masks and plain geometry, unit-tested against an
+      independent numpy implementation. A plane is n·x = d in millimetres.
+    </p>
+    <div class="swatches">
+      {
+        colors.map((c) => (
+          <div class="sw">
+            <span style={`background: var(--${c})`} />
+            <span class="label">--{c}</span>
+          </div>
+        ))
+      }
+    </div>
+  </main>
+</Base>
+
+<style>
+  .spec {
+    display: grid;
+    gap: var(--s-3);
+    padding-block: var(--s-12);
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 6ch 1fr;
+    align-items: baseline;
+    border-bottom: var(--hair);
+    padding-bottom: var(--s-2);
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--gutter);
+  }
+  .sw {
+    display: grid;
+    gap: var(--s-1);
+  }
+  .sw span:first-child {
+    height: 4rem;
+    border: var(--hair);
+  }
+</style>

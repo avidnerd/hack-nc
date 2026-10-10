@@ -1,0 +1,75 @@
+{
+ "case": "liver",
+ "shape": [
+  455,
+  391,
+  111
+ ],
+ "spacing": [
+  1.0,
+  1.0,
+  1.0
+ ],
+ "organVolumeMl": 1251.035,
+ "tumorVolumeMl": 39.484,
+ "tumorCentroidMm": [
+  378.949,
+  235.119,
+  32.715
+ ],
+ "testPlane": {
+  "n": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "d": 335.0
+ },
+ "full": {
+  "remnantPct": 59.149,
+  "resectedMl": 511.055,
+  "marginMm": 12.0,
+  "tumorIncomplete": false,
+  "vesselsCrossed": 1
+ },
+ "testPlaneThroughTumor": {
+  "n": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "d": 378.949
+ },
+ "throughTumor": {
+  "remnantPct": 90.832,
+  "resectedMl": 114.697,
+  "marginMm": 0.0,
+  "tumorIncomplete": true,
+  "vesselsCrossed": 0
+ },
+ "planningFactor": 2,
+ "planningShape": [
+  228,
+  196,
+  56
+ ],
+ "planningSpacing": [
+  2.0,
+  2.0,
+  2.0
+ ],
+ "planning": {
+  "remnantPct": 59.285,
+  "resectedMl": 537.36,
+  "marginMm": 12.166,
+  "tumorIncomplete": false,
+  "vesselsCrossed": 2
+ },
+ "planningThroughTumor": {
+  "remnantPct": 91.232,
+  "resectedMl": 115.728,
+  "marginMm": 0.0,
+  "tumorIncomplete": true,
+  "vesselsCrossed": 0
+ }
+}
