@@ -1,0 +1,40 @@
+---
+import Wordmark from './Wordmark.astro';
+---
+
+<header class="nav">
+  <div class="wrap row">
+    <a href="/" class="home" aria-label="Scrub+ home"><Wordmark /></a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="/demo">Demo</a></li>
+        <li><a href="/how">How it works</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 10;
+    padding-block: var(--s-3);
+  }
+  .row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .home:hover {
+    text-decoration: none;
+  }
+  ul {
+    display: flex;
+    gap: var(--s-4);
+  }
+  nav a {
+    font-size: var(--fs-14);
+    color: var(--text-dim);
+  }
+</style>

@@ -1,0 +1,80 @@
+/*
+ * Scrub+ design tokens. Every colour, size, space and curve on the site comes
+ * from this file; component styles reference these and nothing else.
+ */
+
+@import '@fontsource/geist/latin-400.css';
+@import '@fontsource/geist/latin-500.css';
+@import '@fontsource/geist-mono/latin-400.css';
+@import '@fontsource/geist-mono/latin-500.css';
+
+:root {
+  /*
+   * colour: an operating room at night. Surgical drapes are blue-green so
+   * they don't glare under the lamps; the page is that drape navy. The accent
+   * is the app's own cut-plane edge.
+   */
+  --bg: #081624; /* drape navy */
+  --bg-raise: #0d2033;
+  --lamp: #1b3a5c; /* the pool of light under the overhead lamp */
+  --line: #1c3550;
+  --text: #e6eef6;
+  --text-dim: #93acc4;
+  --text-faint: #5a7690;
+  --accent: #4fe3c1; /* cut-plane edge */
+  --warn: #ffb547;
+  --danger: #ff5a4f;
+  --tissue: #f2c6b4;
+  --frame: #050f1a; /* behind video and pending assets */
+  --accent-select: rgb(79 227 193 / 0.3);
+
+  /* type families. Geist stands in for a licensed grotesk, tuned below. */
+  --font-display: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* type scale, 12 / 14 / 16 / 20 / 28 / 44 / 72 / 120 */
+  --fs-12: 0.75rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --fs-20: clamp(1.125rem, 1.05rem + 0.3vw, 1.25rem);
+  --fs-28: clamp(1.375rem, 1.2rem + 0.8vw, 1.75rem);
+  --fs-44: clamp(2rem, 1.5rem + 2vw, 2.75rem);
+  --fs-72: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem);
+  --fs-120: clamp(3rem, 0.9rem + 8.4vw, 7.5rem);
+
+  --lh-display: 0.95;
+  --lh-body: 1.55;
+  --track-display: -0.035em;
+  --track-tight: -0.02em;
+  --track-label: 0.08em;
+  --weight-display: 500;
+
+  /* space, 8 px base */
+  --s-1: 0.5rem;
+  --s-2: 1rem;
+  --s-3: 1.5rem;
+  --s-4: 2rem;
+  --s-6: 3rem;
+  --s-8: 4rem;
+  --s-12: 6rem;
+  --s-20: clamp(6rem, 3rem + 10vw, 10rem);
+  --s-30: clamp(7rem, 3rem + 14vw, 15rem);
+
+  /* grid */
+  --max: 80rem;
+  --gutter: 1.5rem;
+  --edge: clamp(1rem, 4vw, 2.5rem);
+  --measure: 62ch;
+
+  /* shape */
+  --radius: 2px;
+  --hair: 1px solid var(--line);
+
+  /* motion */
+  --ease-in: cubic-bezier(0.2, 0.7, 0, 1);
+  --ease-scrub: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 300ms;
+  --dur: 600ms;
+  --dur-long: 900ms;
+}

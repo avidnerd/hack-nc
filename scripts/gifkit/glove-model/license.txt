@@ -1,0 +1,11 @@
+Model Information:
+* title:	Realistic Surgical Glove with Folds Texture
+* source:	https://sketchfab.com/3d-models/realistic-surgical-glove-with-folds-texture-38ab320219b647b19c77dfbc66c6e43a
+* author:	Jingfu Chen (https://sketchfab.com/jingfuchen)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Realistic Surgical Glove with Folds Texture" (https://sketchfab.com/3d-models/realistic-surgical-glove-with-folds-texture-38ab320219b647b19c77dfbc66c6e43a) by Jingfu Chen (https://sketchfab.com/jingfuchen) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

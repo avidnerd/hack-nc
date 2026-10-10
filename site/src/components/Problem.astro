@@ -1,0 +1,68 @@
+---
+/**
+ * The problem, as a paragraph rather than a row of stat tiles. The figures
+ * and sources are the verified ones from the brief (data/content.ts SOURCES).
+ */
+---
+
+<section class="section" aria-labelledby="problem-label">
+  <div class="wrap grid">
+    <h2 class="h2 lede" id="problem-label">A surgeon’s hands are sterile. The scan is on a screen they can’t touch.</h2>
+    <div class="prose">
+      <p>
+        Operating-room time costs <span class="fig">$36–37 a minute</span><a class="ref" href="#ref-1">1</a>. Looking
+        back at the CT means asking someone else to click, reaching for a draped mouse, or breaking scrub.
+      </p>
+      <p>
+        Attention is the other cost. When navigation guidance moved from a screen to sound, the time surgeons spent
+        looking at the screen fell from <span class="fig">96% to 10%</span><a class="ref" href="#ref-2">2</a>.
+      </p>
+      <p>
+        And the plan matters. After a major liver resection, <span class="fig">13%</span> of patients develop severe
+        liver failure, and <span class="fig">at least 21%</span> of them die<a class="ref" href="#ref-3">3</a>. How much
+        liver is left, and how far the cut stays from the tumour, are the numbers Scrub+ puts under the surgeon’s
+        hand.
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .lede {
+    grid-column: 1 / span 9;
+    margin-bottom: var(--s-8);
+  }
+  .prose {
+    grid-column: 5 / span 7;
+    display: grid;
+    gap: var(--s-3);
+    font-size: var(--fs-28);
+    line-height: 1.4;
+    letter-spacing: var(--track-tight);
+    color: var(--text-dim);
+    max-width: 34ch;
+  }
+  .fig {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .ref {
+    font-size: 0.55em;
+    vertical-align: super;
+    margin-left: 0.15em;
+    color: var(--text-dim);
+    text-decoration: none;
+  }
+  .ref:hover {
+    color: var(--text);
+  }
+  @media (max-width: 900px) {
+    .lede,
+    .prose {
+      grid-column: 1 / -1;
+    }
+    .prose {
+      font-size: var(--fs-20);
+    }
+  }
+</style>

@@ -1,0 +1,35 @@
+---
+interface Props {
+  size?: 'nav' | 'large';
+}
+const { size = 'nav' } = Astro.props;
+---
+
+<span class:list={['wordmark', size]} aria-label="Scrub+">Scrub<span class="plus" aria-hidden="true">+</span></span>
+
+<style>
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--track-tight);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .nav {
+    font-size: var(--fs-16);
+  }
+  .large {
+    font-size: var(--fs-44);
+    letter-spacing: var(--track-display);
+  }
+  /* A plain "+" sits on the x-height in Geist. Raise and shrink it so its
+     crossbar lands at cap-height middle, aligned to the S. */
+  .plus {
+    display: inline-block;
+    color: var(--accent);
+    font-weight: 400;
+    font-size: 0.86em;
+    transform: translateY(-0.12em);
+    margin-left: 0.02em;
+  }
+</style>

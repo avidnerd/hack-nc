@@ -1,0 +1,18 @@
+{
+  "measuredAt": "2026-10-10T21:12:57.966Z",
+  "planeJitterDeg": 0.156,
+  "planeJitterMaxDeg": 0.478,
+  "planeJitterMethod": "Synthetic: +-1 deg uniform noise on a still palm normal, through the app 1-euro filter, 300 frames at 30 fps.",
+  "optimizerMs": 630,
+  "optimizerRunsMs": [
+    608,
+    620,
+    630,
+    634,
+    635
+  ],
+  "optimizerMethod": "Moment 3 wedge on the liver case, 3,751 candidates, median of 5 runs in Node on the dev laptop.",
+  "remnantErrorPct": 0.136,
+  "marginErrorMm": 0.166,
+  "remnantMethod": "Fixture test plane: TypeScript planning grid vs numpy at full 1.0 mm resolution."
+}

@@ -1,0 +1,119 @@
+---
+import Footer from '../components/Footer.astro';
+import Nav from '../components/Nav.astro';
+import { LINKS } from '../data/content.ts';
+import Base from '../layouts/Base.astro';
+
+const steps = [
+  ['Hold up an open hand', 'The plane follows your palm. Tilt it to tilt the cut.'],
+  ['“Scrub, place the stent”', 'The graft seats, sizes itself, and says whether it seals.'],
+  ['“Scrub, optimize”', 'Your cut re-seats itself to clear the vessel.'],
+  ['“Show the patient”', 'The view simplifies and explains the plan in plain words.'],
+];
+---
+
+<Base title="Try Scrub+" description="Run Scrub+ in Chrome with your own webcam and voice, or locally from the repository.">
+  <Nav />
+  <main>
+    <section class="section top" aria-labelledby="demo-title">
+      <div class="wrap grid">
+        <h1 class="h2 title" id="demo-title">Try it</h1>
+        <div class="run">
+          {
+            LINKS.app ? (
+              <p>
+                <a class="go" href={LINKS.app}>
+                  Open the app in Chrome <span aria-hidden="true">→</span>
+                </a>
+              </p>
+            ) : (
+              <>
+                <p class="body">Runs locally in Chrome. Two commands from a fresh clone:</p>
+                <pre class="mono cmd"><code>npm install
+npm run dev</code></pre>
+              </>
+            )
+          }
+          <p class="body small">
+            Camera frames never leave the device. No webcam or microphone: every action has a mouse or keyboard
+            fallback.
+          </p>
+        </div>
+        <ol class="script">
+          {
+            steps.map(([say, see], i) => (
+              <li>
+                <span class="label">0{i + 1}</span>
+                <span class="say">{say}</span>
+                <span class="see">{see}</span>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .top {
+    padding-top: var(--s-30);
+  }
+  .grid {
+    row-gap: var(--s-4);
+  }
+  .lab,
+  .title {
+    grid-column: 1 / span 8;
+  }
+  .run {
+    grid-column: 1 / span 5;
+    display: grid;
+    gap: var(--s-2);
+    align-content: start;
+  }
+  .go {
+    font-size: var(--fs-20);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    text-decoration-thickness: 1px;
+  }
+  .cmd {
+    margin: 0;
+    padding: var(--s-2) 0;
+    border-block: var(--hair);
+    font-size: var(--fs-16);
+    color: var(--text);
+  }
+  .small {
+    font-size: var(--fs-14);
+  }
+  .script {
+    grid-column: 7 / span 6;
+    border-top: var(--hair);
+  }
+  .script li {
+    display: grid;
+    grid-template-columns: 4ch 1fr;
+    column-gap: var(--s-2);
+    padding-block: var(--s-2);
+    border-bottom: var(--hair);
+  }
+  .say {
+    color: var(--text);
+  }
+  .see {
+    grid-column: 2;
+    color: var(--text-dim);
+    font-size: var(--fs-16);
+  }
+  @media (max-width: 900px) {
+    .lab,
+    .title,
+    .run,
+    .script {
+      grid-column: 1 / -1;
+    }
+  }
+</style>
