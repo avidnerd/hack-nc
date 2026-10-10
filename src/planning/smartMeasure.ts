@@ -165,21 +165,22 @@ export function idsFor(d: CaseData, key: string): number[] {
   return L.filter((l) => l.key === key).map((l) => l.id);
 }
 
-/**
- * Closest approach of structure B to structure A. The EDT runs from the
- * smaller structure over its bounding box grown by `reachMm`; null when B is
- * further than that.
- */
-export function structureDistance(d: CaseData, aIds: number[], bIds: number[], reachMm = 60): StructureDistance | null {
-  const v = { shape: d.meta.shape, spacing: d.meta.spacing, origin: d.meta.origin, labels: d.labels };
-  let A = voxelsOf(v, aIds);
-  let B = voxelsOf(v, bIds);
-  if (A.length === 0 || B.length === 0) return null;
-  const swapped = A.length > B.length;
-  if (swapped) [A, B] = [B, A];
+/** A distance field from structure A over its bounding box grown by `reachMm`. */
+interface Field {
+  dist: Float32Array;
+  lo: number[];
+  hi: number[];
+  local: (p: number[]) => number;
+  ijk: (id: number) => number[];
+  world: (p: number[]) => Vec3;
+  vox: number;
+  A: Int32Array;
+}
 
-  const [nx, ny, nz] = v.shape;
-  const sp = v.spacing;
+function fieldFrom(d: CaseData, A: Int32Array, reachMm: number): Field {
+  const [nx, ny, nz] = d.meta.shape;
+  const sp = d.meta.spacing;
+  const o = d.meta.origin;
   const ijk = (id: number) => {
     const i = id % nx;
     const j = ((id - i) / nx) % ny;
@@ -205,33 +206,76 @@ export function structureDistance(d: CaseData, aIds: number[], bIds: number[], r
   const seed = new Uint8Array(bx * by * bz);
   for (const id of A) seed[local(ijk(id))] = 1;
   const dist = edt3d(seed, { nx: bx, ny: by, nz: bz, spacing: [...sp] as [number, number, number] });
+  const world = (p: number[]): Vec3 => [o[0] + p[0] * sp[0], o[1] + p[1] * sp[1], o[2] + p[2] * sp[2]];
+  return { dist, lo, hi, local, ijk, world, vox: (sp[0] + sp[1] + sp[2]) / 3, A };
+}
 
+/** Closest voxel of B to the field's structure, then its partner in A. */
+function closestIn(f: Field, B: Int32Array, reachMm: number): StructureDistance | null {
   let best = Infinity;
   let bestB = -1;
   for (const id of B) {
-    const p = ijk(id);
-    if (p[0] < lo[0] || p[0] > hi[0] || p[1] < lo[1] || p[1] > hi[1] || p[2] < lo[2] || p[2] > hi[2]) continue;
-    const dd = dist[local(p)];
+    const p = f.ijk(id);
+    if (p[0] < f.lo[0] || p[0] > f.hi[0] || p[1] < f.lo[1] || p[1] > f.hi[1] || p[2] < f.lo[2] || p[2] > f.hi[2]) continue;
+    const dd = f.dist[f.local(p)];
     if (dd < best) [best, bestB] = [dd, id];
   }
   if (bestB < 0 || best > reachMm) return null;
-
-  const pb = ijk(bestB);
-  const wb: Vec3 = [v.origin[0] + pb[0] * sp[0], v.origin[1] + pb[1] * sp[1], v.origin[2] + pb[2] * sp[2]];
+  const wb = f.world(f.ijk(bestB));
   let wa: Vec3 = wb;
   let ad = Infinity;
-  for (const id of A) {
-    const p = ijk(id);
-    const q: Vec3 = [v.origin[0] + p[0] * sp[0], v.origin[1] + p[1] * sp[1], v.origin[2] + p[2] * sp[2]];
+  for (const id of f.A) {
+    const q = f.world(f.ijk(id));
     const dd = (q[0] - wb[0]) ** 2 + (q[1] - wb[1]) ** 2 + (q[2] - wb[2]) ** 2;
     if (dd < ad) [ad, wa] = [dd, q];
   }
   // Centre-to-centre distance overstates the gap between the two surfaces by
   // about one voxel (each surface sits half a voxel out from its centres).
-  const vox = (sp[0] + sp[1] + sp[2]) / 3;
-  const gap = Math.max(0, best - vox);
-  const [pa, pbw] = swapped ? [wb, wa] : [wa, wb];
-  return { mm: gap, a: pa, b: pbw, touching: best <= vox * 1.01 };
+  return { mm: Math.max(0, best - f.vox), a: wa, b: wb, touching: best <= f.vox * 1.01 };
+}
+
+function voxOf(d: CaseData, ids: number[]): Int32Array {
+  return voxelsOf({ shape: d.meta.shape, spacing: d.meta.spacing, origin: d.meta.origin, labels: d.labels }, ids);
+}
+
+/**
+ * Closest approach of structure B to structure A. The EDT runs from the
+ * smaller structure over its bounding box grown by `reachMm`; null when B is
+ * further than that.
+ */
+export function structureDistance(d: CaseData, aIds: number[], bIds: number[], reachMm = 60): StructureDistance | null {
+  let A = voxOf(d, aIds);
+  let B = voxOf(d, bIds);
+  if (A.length === 0 || B.length === 0) return null;
+  const swapped = A.length > B.length;
+  if (swapped) [A, B] = [B, A];
+  const r = closestIn(fieldFrom(d, A, reachMm), B, reachMm);
+  if (!r || !swapped) return r;
+  return { ...r, a: r.b, b: r.a };
+}
+
+export interface NearestCandidate extends StructureDistance {
+  /** Label id of the candidate structure. */
+  id: number;
+}
+
+/**
+ * "Where is the tumour closest to a vessel": one distance field from A, read
+ * off for every candidate label; candidates sorted nearest first (those
+ * beyond `reachMm` are left out).
+ */
+export function nearestAmong(d: CaseData, aIds: number[], candidateIds: number[], reachMm = 80): NearestCandidate[] {
+  const A = voxOf(d, aIds);
+  if (A.length === 0) return [];
+  const f = fieldFrom(d, A, reachMm);
+  const out: NearestCandidate[] = [];
+  for (const id of candidateIds) {
+    const B = voxOf(d, [id]);
+    if (B.length === 0) continue;
+    const r = closestIn(f, B, reachMm);
+    if (r) out.push({ ...r, id });
+  }
+  return out.sort((x, y) => x.mm - y.mm);
 }
 
 /* -------------------------------------------------------------- named cut */

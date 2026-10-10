@@ -108,6 +108,12 @@ export class StentSession {
     );
   }
 
+  /** Put a saved stent back exactly (restoring a plan); null removes it. */
+  restore(st: StentState | null): void {
+    this.anim = null;
+    this.apply(st && this.cl ? st : null);
+  }
+
   /** Drop the device without a spoken line (reset, case switch). */
   clear(): void {
     this.anim = null;

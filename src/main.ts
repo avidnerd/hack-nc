@@ -41,7 +41,9 @@ import { PlanningGrid } from './planning/volume.ts';
 import { AnatomyView } from './render/anatomy.ts';
 import { Overlays } from './render/overlays.ts';
 import { measureStructure } from './planning/anatomyMeasure.ts';
-import { idsFor, namedCut, renalLevelCut, structureDistance, type Orientation } from './planning/smartMeasure.ts';
+import { idsFor, namedCut, renalLevelCut, type Orientation } from './planning/smartMeasure.ts';
+import { Copilot } from './copilot/copilot.ts';
+import { Bench } from './copilot/bench.ts';
 import { InfoCard } from './ui/infoCard.ts';
 import { outcomes, suggestions, type AdviceFacts } from './ai/advice.ts';
 import { VolumeRenderer } from './render/volumeRenderer.ts';
@@ -75,6 +77,24 @@ const guide = new Guide();
 const anatomy = new AnatomyView(renderer.rig);
 const overlays = new Overlays(renderer.rig, (p) => renderer.worldToScreen(p));
 const stents = new StentSession(renderer.rig, (p) => renderer.worldToScreen(p));
+const copilot = new Copilot({
+  engine: () => engine,
+  grid: () => grid,
+  frame: () => renderer.frame,
+  tweenCamera: (to, ms) => tweenCamera(to, ms),
+  stopTweens: () => {
+    camTween = null;
+    planeTween = null;
+  },
+  showCard: (c) => infoCard.show(c),
+  setPreset: (p) => setPreset(p),
+  restoreStent: (st) => stents.restore(st),
+  rebuildPalette: () => {
+    if (state.data) renderer.buildPalette(state.data);
+  },
+  noteMeasured: () => guide.note('measured'),
+});
+const bench = new Bench(copilot.plans);
 
 const hands = new HandInput();
 const head = HeadTracker.enabled() ? new HeadTracker() : null;
@@ -266,6 +286,12 @@ async function switchCase(id: string): Promise<void> {
     const data = await loadCase(known.id);
     state.caseId = known.id;
     set('data', data);
+    // The copilot's view of the last case (framing, focus, sections) goes with it.
+    copilot.onCase();
+    patch('camera', { target: [0, 0, 0] });
+    set('focus', []);
+    set('viewSection', false);
+    set('ghostPlane', null);
 
     // Apply the case's own defaults before the first frame is drawn.
     state.preset = data.meta.defaultPreset;
@@ -349,6 +375,8 @@ function loop(now: number): void {
     }
     overlays.update();
     stents.update(dt);
+    copilot.tick();
+    bench.tick();
     renderer.render();
   } catch (err) {
     if (loopErrors++ < 5) console.error('[loop] frame failed', err);
@@ -393,7 +421,7 @@ function recomputeMetrics(): void {
   // The whole-structure glow is for named trunks (portal vein, IVC). The
   // intrahepatic tree is one label, so lighting it would light every branch;
   // the overlay marks the divided branch itself instead.
-  const viewOnly = state.data?.meta.kind === 'aorta';
+  const viewOnly = state.data?.meta.kind === 'aorta' || state.viewSection;
   renderer.proximityLabel = viewOnly || metrics.vesselId === HEPATIC_TREE_ID ? 0 : metrics.vesselId;
   set('metrics', metrics);
 }
@@ -444,6 +472,7 @@ function tickTweens(now: number): void {
       yaw: lerp(f.yaw, to.yaw, e),
       pitch: lerp(f.pitch, to.pitch, e),
       dist: lerp(f.dist, to.dist, e),
+      target: [lerp(f.target[0], to.target[0], e), lerp(f.target[1], to.target[1], e), lerp(f.target[2], to.target[2], e)],
     });
     if (t >= 1) camTween = null;
   }
@@ -565,50 +594,6 @@ function namedCutIntent(orientation: Orientation, through: string | null, offset
   say(`${ORIENT_WORD[orientation]} cut ${where}.${nums}`);
 }
 
-/** "How far is the tumor from the portal vein": closest wall-to-wall gap. */
-function distanceIntent(a: string, b: string): void {
-  const data = state.data;
-  if (!data) return;
-  const aIds = idsFor(data, a);
-  const bIds = idsFor(data, b);
-  // Speak a single structure by its label name ("inferior vena cava"), a
-  // group by its word ("vessels").
-  const name = (k: string) => {
-    const ids = idsFor(data, k);
-    return ids.length === 1 ? labelName(ids[0]) : k.replace('_', ' ');
-  };
-  if (!aIds.length || !bIds.length) {
-    say(`No ${name(aIds.length ? b : a)} in this case.`);
-    return;
-  }
-  const r = structureDistance(data, aIds, bIds);
-  if (!r) {
-    say(`The ${name(a)} and the ${name(b)} are more than 6 centimeters apart.`);
-    return;
-  }
-  const label = `${cap(name(a))} ↔ ${name(b)}`;
-  set('caliper', { a: r.a, b: r.b, mm: r.mm, label });
-  const vesselish = /vein|vessel|ivc|aorta|portal/.test(a + b) && /tumor/.test(a + b);
-  infoCard.show({
-    kicker: 'Measure',
-    title: label,
-    rows: [{ label: 'Closest wall-to-wall gap', value: r.touching ? 'in contact' : `${r.mm.toFixed(1)} mm` }],
-    notes: [
-      'Closest points marked. Edge to edge on the segmentation grid (±1 voxel).',
-      ...(vesselish
-        ? [
-            r.mm < state.thresholds.marginMin
-              ? `Closer than your ${state.thresholds.marginMin} mm margin target: on this side the margin cannot reach it without taking the vessel.`
-              : `Beyond your ${state.thresholds.marginMin} mm margin target, so it does not limit the margin.`,
-          ]
-        : []),
-    ],
-  });
-  guide.note('measured');
-  const mm = Math.round(r.mm);
-  say(r.touching ? `The ${name(a)} touches the ${name(b)}.` : `The ${name(a)} is ${mm} millimeter${mm === 1 ? '' : 's'} from the ${name(b)}.`);
-}
-
 /** "What's the margin", "how much liver is left", "which vessels does it cross". */
 function queryIntent(what: 'margin' | 'remnant' | 'vessels'): void {
   const m = state.metrics;
@@ -633,10 +618,6 @@ function queryIntent(what: 'margin' | 'remnant' | 'vessels'): void {
 
 function labelName(id: number): string {
   return (state.data?.meta.labels.find((l) => l.id === id)?.name ?? 'vessel').toLowerCase();
-}
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /* --------------------------------------------------------------- plan note */
@@ -787,7 +768,10 @@ function firstLabelled(o: Vec3, d: Vec3): Vec3 | null {
  * the compiler insisting it be handled.
  */
 export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'): void {
-  if (source !== 'key') console.debug('[intent]', source, intent);
+  if (source !== 'key') {
+    console.debug('[intent]', source, intent);
+    bench.countVoice(); // keys are counted by the bench's own listener
+  }
 
   switch (intent.kind) {
     case 'window': {
@@ -910,8 +894,42 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       namedCutIntent(intent.orientation, intent.through, intent.offsetMm);
       break;
 
+    // "How far is X from Y" gets the same view as "show me X relative to Y".
     case 'distance':
-      distanceIntent(intent.a, intent.b);
+    case 'relation':
+      copilot.relation(intent.a, intent.b);
+      break;
+
+    case 'nearest':
+      copilot.nearest(intent.a);
+      break;
+
+    case 'focus':
+      copilot.focus(intent.structure);
+      break;
+
+    case 'savePlan':
+      copilot.saveBaseline();
+      break;
+
+    case 'confirm':
+      copilot.confirm();
+      break;
+
+    case 'restorePlan':
+      copilot.restoreBaseline();
+      break;
+
+    case 'comparePlan':
+      copilot.compare();
+      break;
+
+    case 'previousView':
+      copilot.previousView();
+      break;
+
+    case 'cancel':
+      copilot.cancel();
       break;
 
     case 'query':
@@ -970,7 +988,8 @@ declare global {
       state: typeof state;
       renderer: VolumeRenderer;
       dispatch: typeof dispatchIntent;
+      bench: Bench;
     };
   }
 }
-window.scrub = { state, renderer, dispatch: dispatchIntent };
+window.scrub = { state, renderer, dispatch: dispatchIntent, bench };

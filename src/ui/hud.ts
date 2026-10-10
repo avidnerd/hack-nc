@@ -132,7 +132,8 @@ export class Hud {
   private layoutCells(): void {
     const aorta = state.data?.meta.kind === 'aorta';
     this.planeShown = state.plane.on;
-    const liver = !aorta;
+    // A copilot viewing section is not a resection either.
+    const liver = !aorta && !state.viewSection;
     for (const k of ['remnant', 'margin', 'vessels']) this.setCellVisible(k, liver);
     this.setCellVisible('neck', !!state.stent);
     this.setCellVisible('flow', aorta && state.flowDrop !== null);
@@ -147,6 +148,7 @@ export class Hud {
 
   private subscribe(): void {
     on('metrics', () => this.syncNumbers());
+    on('viewSection', () => this.layoutCells());
     on('stent', () => {
       this.layoutCells();
       this.syncNumbers();

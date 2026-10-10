@@ -159,6 +159,9 @@ interface Part {
   /** The lifted copy, for structures that leave with the resected piece. */
   lifted: THREE.Mesh | null;
   baseEmissive: THREE.Color;
+  /** The material's own look, restored when the copilot's focus clears. */
+  base: { opacity: number; transparent: boolean; depthWrite: boolean };
+  ghosted: boolean;
 }
 
 export class AnatomyView {
@@ -261,7 +264,11 @@ export class AnatomyView {
         lifted.visible = false;
         this.lift.add(lifted);
       }
-      this.parts.push({ entry: e, mesh, lifted, baseEmissive: mat.emissive.clone() });
+      this.parts.push({
+        entry: e, mesh, lifted, baseEmissive: mat.emissive.clone(),
+        base: { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite },
+        ghosted: false,
+      });
     }
 
     // The lifted piece's face shows only what actually leaves: organ, tumour, its vessels.
@@ -336,13 +343,25 @@ export class AnatomyView {
       p.mesh.visible = visible;
       // While cutting, the piece to be removed is a faint ghost with the tumour
       // solid inside it; once locked it lifts away and turns solid.
-      if (p.lifted) p.lifted.visible = visible && planeOn;
+      if (p.lifted) p.lifted.visible = visible && planeOn && !state.viewSection;
 
       const mat = p.mesh.material as THREE.MeshPhysicalMaterial;
-      const hl = highlight > 0 && p.entry.label === highlight;
+      // Copilot focus: the structures asked about glow in their own colours,
+      // everything else fades to a ghost so they read through the liver.
+      const focus = state.focus;
+      const inFocus = focus.length > 0 && focus.includes(p.entry.label);
+      const ghost = focus.length > 0 && !inFocus && !patient;
+      if (ghost !== p.ghosted) {
+        p.ghosted = ghost;
+        mat.transparent = ghost || p.base.transparent;
+        mat.depthWrite = ghost ? false : p.base.depthWrite;
+        mat.needsUpdate = true;
+      }
+      const hl = (highlight > 0 && p.entry.label === highlight) || inFocus;
       mat.emissive.copy(p.baseEmissive);
-      if (hl) mat.emissive.lerp(new THREE.Color(...(state.data?.meta.labels.find((l) => l.id === highlight)?.color ?? [1, 1, 1])), 0.35 + 0.45 * pulse);
-      if (key === 'skin') mat.opacity = patient ? 0 : 0.55;
+      if (hl) mat.emissive.lerp(new THREE.Color(...(state.data?.meta.labels.find((l) => l.id === p.entry.label)?.color ?? [1, 1, 1])), 0.35 + 0.45 * pulse);
+      mat.opacity = ghost ? (key === 'bone' ? 0.1 : 0.08) : p.base.opacity;
+      if (key === 'skin') mat.opacity = patient || ghost ? 0 : 0.55;
       if (key === 'bone') mat.color.setHex(preset === 'bone' ? 0xfff6e2 : 0xe8dfcc);
       if (p.lifted) {
         const lm = p.lifted.material as THREE.MeshPhysicalMaterial;

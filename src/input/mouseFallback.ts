@@ -91,7 +91,8 @@ export function installMouse(canvas: HTMLCanvasElement, hooks: MouseHooks): void
       e.preventDefault();
       const c = state.camera;
       const factor = Math.exp(e.deltaY * 0.0012);
-      patch('camera', { dist: clamp(c.dist * factor, TUNING.zoomMin, TUNING.zoomMax) });
+      // The copilot may frame closer than the manual minimum; never jump out from there.
+      patch('camera', { dist: clamp(c.dist * factor, Math.min(TUNING.zoomMin, c.dist), TUNING.zoomMax) });
     },
     { passive: false },
   );
