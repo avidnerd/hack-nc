@@ -37,6 +37,8 @@ export class Overlays {
   /** One marker per vessel the cut divides, exactly where it divides it. */
   private vesselMarks: THREE.Points;
   private vesselTags: HTMLElement[] = [];
+  /** A saved plan's plane, dashed, beside the live one (compare). */
+  private ghostLine: THREE.LineLoop;
 
   private frame: Frame | null = null;
 
@@ -74,6 +76,13 @@ export class Overlays {
     this.group.add(this.vesselMarks);
     for (let i = 0; i < 4; i++) this.vesselTags.push(label('vessel-tag'));
 
+    this.ghostLine = new THREE.LineLoop(
+      new THREE.BufferGeometry(),
+      new THREE.LineDashedMaterial({ color: 0xc9a7ff, dashSize: 0.015, gapSize: 0.01, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false }),
+    );
+    this.ghostLine.renderOrder = 10;
+    this.group.add(this.ghostLine);
+
     this.caliperLabel = label('caliper-label');
 
     on('caliper', () => this.syncCaliper());
@@ -103,6 +112,13 @@ export class Overlays {
     this.updateMargin(f);
     this.updateVesselCuts(f);
 
+    const g = state.ghostPlane;
+    this.ghostLine.visible = !!g && state.mode === 'surgeon';
+    if (g) {
+      setPositions(this.ghostLine.geometry, planeBoxPolygon(f, g).map((q) => worldToObject(f, q)));
+      this.ghostLine.computeLineDistances();
+    }
+
     const c = state.caliper;
     if (c.a && c.b) {
       const mid: Vec3 = [(c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2, (c.a[2] + c.b[2]) / 2];
@@ -124,7 +140,7 @@ export class Overlays {
   private updateMargin(f: Frame): void {
     const m = state.metrics;
     const path = m?.marginPath;
-    const show = !!m && !!path && state.plane.on && state.mode === 'surgeon' && !m.tumorIncomplete;
+    const show = !!m && !!path && state.plane.on && state.mode === 'surgeon' && !m.tumorIncomplete && !state.viewSection;
     this.marginLine.visible = show;
     this.marginEnds.visible = show;
     if (!show || !m || !path) {
@@ -153,7 +169,7 @@ export class Overlays {
   private updateVesselCuts(f: Frame): void {
     const m = state.metrics;
     // Resection marks belong to the liver case; an aorta-case cut only views.
-    const resection = state.data?.meta.kind === 'liver';
+    const resection = state.data?.meta.kind === 'liver' && !state.viewSection;
     const cuts = resection && state.plane.on && state.mode === 'surgeon' ? (m?.vesselCuts ?? []) : [];
     this.vesselMarks.visible = cuts.length > 0;
     if (cuts.length > 0) setPositions(this.vesselMarks.geometry, cuts.map((c) => worldToObject(f, c.p)));

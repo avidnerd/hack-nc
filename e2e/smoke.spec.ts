@@ -70,3 +70,78 @@ test('keyboard fallback runs moments 2 to 4', async ({ page }) => {
   await page.waitForFunction(() => window.scrub!.state.mode === 'patient');
   await expect(page.locator('#callouts')).toBeVisible();
 });
+
+test('copilot: ask for anatomy, get the view and the verified measurement', async ({ page }) => {
+  await page.goto('/?hands=off&voice=off');
+  await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
+  await page.evaluate(() => (window.scrub!.renderer.stepsOverride = 16));
+  // The grammar is imported in the page by its dev-server URL (a variable, so
+  // TypeScript does not try to resolve a browser path at compile time).
+  const say = (text: string) =>
+    page.evaluate(async (t) => {
+      const url = '/src/voice/intents.ts';
+      const { parseIntent } = (await import(/* @vite-ignore */ url)) as typeof import('../src/voice/intents.ts');
+      const intent = parseIntent(t);
+      if (!intent) throw new Error(`no intent for "${t}"`);
+      window.scrub!.dispatch(intent, 'voice');
+    }, text);
+
+  // A: relationship. The camera flies in, both structures are in focus, the
+  // closest points are joined and the reading names them.
+  await say('show me the tumor relative to the portal vein');
+  await page.waitForFunction(() => /portal vein/i.test(window.scrub!.state.caliper.label ?? ''));
+  await page.waitForTimeout(800);
+  const a = await page.evaluate(() => {
+    const s = window.scrub!.state;
+    return { target: s.camera.target, dist: s.camera.dist, focus: s.focus.length, mm: s.caliper.mm, response: s.response };
+  });
+  expect(Math.hypot(...a.target)).toBeGreaterThan(0.05); // moved off the volume centre
+  expect(a.dist).toBeLessThan(1.75); // and closer than the default view
+  expect(a.focus).toBe(2);
+  expect(a.response).toMatch(/millimeters? from the portal vein/);
+  await expect(page.locator('.info-card.show')).toContainText('Closest wall-to-wall gap');
+
+  // B: closest vessel, with a CT section through the gap.
+  await say('show me where the tumor is closest to a major vessel');
+  await page.waitForFunction(() => window.scrub!.state.viewSection === true, null, { timeout: 15_000 });
+  await expect(page.locator('.info-card.show')).toContainText('Closest:');
+
+  // C: a cut, saved as the baseline; saving again needs a confirmation.
+  await say('make a sagittal cut 12 millimeters from the tumor');
+  await page.waitForFunction(() => window.scrub!.state.plane.on && !window.scrub!.state.viewSection);
+  await page.waitForTimeout(800);
+  await say('save this plan');
+  await page.waitForFunction(() => /Saved as the original plan/.test(window.scrub!.state.response));
+  const saved = await page.evaluate(() => ({ ...window.scrub!.state.plane }));
+  await say('save this plan');
+  await page.waitForFunction(() => /confirm/.test(window.scrub!.state.response));
+
+  // Move the cut by hand (keyboard stand-in for the palm), then compare.
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
+  await say('compare this cut to the original plan');
+  await page.waitForFunction(() => window.scrub!.state.ghostPlane !== null);
+  await expect(page.locator('.info-card.show')).toContainText('Original → current');
+  expect(await page.evaluate(() => window.scrub!.state.response)).toMatch(/^Compared with the saved plan, the current plane /);
+
+  // D: restore reproduces the saved plane exactly; go back returns.
+  await say('show me the original plan');
+  await page.waitForFunction(() => /Original plan restored/.test(window.scrub!.state.response));
+  const restored = await page.evaluate(() => ({ ...window.scrub!.state.plane }));
+  expect(restored.d).toBeCloseTo(saved.d, 9);
+  expect(restored.n).toEqual(saved.n);
+  await say('go back to the previous view');
+  await page.waitForFunction(() => window.scrub!.state.response === 'Previous view.');
+
+  // A structure this segmentation does not have: said plainly, no measurement.
+  const before = await page.evaluate(() => window.scrub!.state.caliper.mm);
+  await page.evaluate(() => window.scrub!.dispatch({ kind: 'relation', a: 'tumor', b: 'kidney_cyst' }, 'llm'));
+  await page.waitForFunction(() => /There is no kidney cyst in this segmentation/.test(window.scrub!.state.response));
+  expect(await page.evaluate(() => window.scrub!.state.caliper.mm)).toBe(before);
+  // Words outside the vocabulary never become a command.
+  expect(
+    await page.evaluate(async () => {
+      const url = '/src/voice/intents.ts';
+      return ((await import(/* @vite-ignore */ url)) as typeof import('../src/voice/intents.ts')).parseIntent('focus on the spleen');
+    }),
+  ).toBeNull();
+});

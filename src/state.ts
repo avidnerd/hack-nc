@@ -29,6 +29,12 @@ export interface CameraState {
   /** Head-coupled offset in radians (M8), added on top of yaw/pitch. */
   headYaw: number;
   headPitch: number;
+  /**
+   * Point the camera orbits and looks at, in object space (the volume centre
+   * is the origin). The copilot moves it onto the anatomy it frames; manual
+   * rotate and zoom then pivot around it.
+   */
+  target: Vec3;
 }
 
 export interface AppState {
@@ -58,6 +64,19 @@ export interface AppState {
   visible: Record<string, boolean>;
   /** Label id that should pulse, or 0 for none. */
   highlight: number;
+  /**
+   * Structures the copilot is showing: they glow in their own colours and
+   * everything else fades to a ghost. Empty for the normal view.
+   */
+  focus: number[];
+  /**
+   * The cutting plane is a viewing section placed by the copilot (to show a
+   * relationship on the CT), not a resection: no liver numbers or resection
+   * marks are drawn for it. Cleared as soon as the plane is moved otherwise.
+   */
+  viewSection: boolean;
+  /** A saved plan's plane drawn as a ghost beside the current one (compare). */
+  ghostPlane: Plane | null;
 
   metrics: PlanMetrics | null;
   /** True while a worker recomputation is in flight. */
@@ -109,7 +128,7 @@ function initialState(): AppState {
     mode: 'surgeon',
     inputMode: 'mouse',
 
-    camera: { yaw: 0.3, pitch: 0.85, dist: 1.75, headYaw: 0, headPitch: 0 },
+    camera: { yaw: 0.3, pitch: 0.85, dist: 1.75, headYaw: 0, headPitch: 0, target: [0, 0, 0] },
 
     plane: { n: [1, 0, 0], d: 0, on: false, locked: false },
 
@@ -118,6 +137,9 @@ function initialState(): AppState {
 
     visible: {},
     highlight: 0,
+    focus: [],
+    viewSection: false,
+    ghostPlane: null,
 
     metrics: null,
     metricsStale: false,
@@ -164,6 +186,9 @@ export interface Events {
   preset: PresetName;
   visible: Record<string, boolean>;
   highlight: number;
+  focus: number[];
+  viewSection: boolean;
+  ghostPlane: Plane | null;
   metrics: PlanMetrics | null;
   stent: StentState | null;
   flowDrop: number | null;
@@ -266,6 +291,9 @@ export function resetScene(): void {
   state.caliper = fresh.caliper;
   state.thresholds = { ...DEFAULT_THRESHOLDS };
   state.highlight = 0;
+  state.focus = [];
+  state.viewSection = false;
+  state.ghostPlane = null;
   state.transcript = '';
   state.response = '';
   if (state.data) {
@@ -284,6 +312,9 @@ export function resetScene(): void {
   emit('windowLevel', state.windowLevel);
   emit('visible', state.visible);
   emit('highlight', 0);
+  emit('focus', []);
+  emit('viewSection', false);
+  emit('ghostPlane', null);
 }
 
 /**

@@ -22,6 +22,13 @@ export const SHORTCUT_HELP: [string, string][] = [
   ['M', 'measure'],
   ['A', 'suggestions'],
   ['E', 'published outcomes'],
+  ['J', 'tumour relative to the portal vein'],
+  ['N', 'where the tumour is closest to a vessel'],
+  ['B', 'save as the original plan (Shift+B confirms a replace)'],
+  ['U', 'show the original plan'],
+  ['Y', 'compare this cut with the original'],
+  ['Backspace', 'previous view'],
+  ['Esc', 'cancel'],
   ['[  ]', 'nudge the stent'],
   ['P', 'patient view'],
   ['W', 'write the plan'],
@@ -99,6 +106,32 @@ export function installKeyboard(hooks: KeyboardHooks): void {
       case 'E':
         d({ kind: 'outcomes' }, 'key');
         break;
+      /* --- copilot -------------------------------------------------------- */
+      case 'j':
+      case 'J':
+        d({ kind: 'relation', a: 'tumor', b: 'portal_vein' }, 'key');
+        break;
+      case 'n':
+      case 'N':
+        d({ kind: 'nearest', a: 'tumor' }, 'key');
+        break;
+      case 'b':
+        d({ kind: 'savePlan' }, 'key');
+        break;
+      case 'B':
+        d({ kind: 'confirm' }, 'key');
+        break;
+      case 'u':
+      case 'U':
+        d({ kind: 'restorePlan' }, 'key');
+        break;
+      case 'y':
+      case 'Y':
+        d({ kind: 'comparePlan' }, 'key');
+        break;
+      case 'Backspace':
+        d({ kind: 'previousView' }, 'key');
+        break;
       case 'x':
       case 'X':
         d({ kind: 'plane', on: !state.plane.on }, 'key');
@@ -150,6 +183,7 @@ export function installKeyboard(hooks: KeyboardHooks): void {
         break;
       case 'Escape':
         if (state.showHelp) set('showHelp', false);
+        else d({ kind: 'cancel' }, 'key');
         break;
 
       /* --- mouse-free plane nudging, handy when demoing one-handed ------- */

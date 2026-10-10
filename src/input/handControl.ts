@@ -210,7 +210,8 @@ export class HandController {
       return;
     }
     // Hands apart = closer, like stretching a photo.
-    const dist = clamp(this.zoom.dist0 * Math.pow(this.zoom.gap0 / Math.max(gap, 0.02), TUNING.zoomGain), TUNING.zoomMin, TUNING.zoomMax);
+    const floor = Math.min(TUNING.zoomMin, this.zoom.dist0); // copilot may have framed closer
+    const dist = clamp(this.zoom.dist0 * Math.pow(this.zoom.gap0 / Math.max(gap, 0.02), TUNING.zoomGain), floor, TUNING.zoomMax);
     patch('camera', { dist });
   }
 

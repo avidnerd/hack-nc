@@ -38,6 +38,25 @@ Scrub+ is designed to be...
 - **real data**: open CT scans from the Medical Segmentation Decathlon, not synthetic phantoms
 - **un-killable on stage**: every gesture and voice command has a mouse or keyboard fallback, and the whole thing runs with the LLM turned off
 
+# the copilot
+
+> surgeons shouldn't have to direct someone through a series of clicks to see patient-specific anatomy during a sterile procedure. scrub+ lets them ask for exactly what they need and immediately see it.
+
+Say **"scrub, show me…"** and the app flies the camera to the anatomy, highlights it, and puts a verified measurement on it. Hands, mouse and keys still work the whole time: the camera just orbits whatever it framed, so you can adjust from there.
+
+| say | what happens |
+|---|---|
+| "show me the tumor relative to the portal vein" | both structures found in the segmentation, closest wall-to-wall gap measured, camera turned to see the gap side-on, both highlighted (everything else ghosted), line + mm drawn on the anatomy |
+| "show me where the tumor is closest to a major vessel" | every segmented vessel searched at once, the closest one shown the same way, plus a CT section through the gap |
+| "focus on the left kidney" | fly to one structure and highlight it |
+| "save this plan" / "show me the original plan" | a baseline plan (plane, camera, structures, measurement, thresholds); replacing it needs "confirm" |
+| "compare this cut to the original plan" | both planes through the same planning engine: margin, remnant, resected mL, vessel components, plane angle and shift, side by side; the original plane drawn dashed |
+| "go back to the previous view" / "cancel" | undo the last navigation / stop and clear |
+
+Every number comes from the deterministic code (the same EDT and planning engine as everything else). The LLM, when on, only maps unusual phrasing to one of these typed commands, and it can't confirm an overwrite. If a structure isn't in the segmentation, it says so. Keys: `J` relation, `N` nearest vessel, `B` save (`Shift+B` confirms), `U` original, `Y` compare, `Backspace` previous view, `Esc` cancel.
+
+**Benchmark** (`npm run bench`, [docs/BENCHMARK.md](docs/BENCHMARK.md)): each of the four tasks above takes one command and puts the correct answer on screen in 9–570 ms of machine time, checked against an independent recomputation. That's software latency, not a human study; the same in-app instrumentation is ready to time real users doing the tasks by hand vs. by voice.
+
 # the gestures
 
 The gloved hand in the corner is what the camera sees. Everything else is the real app reacting.
@@ -74,7 +93,7 @@ npm run dev
 
 Then open the URL it prints and allow the camera and mic. No Python needed, the processed volumes are already in `public/data/`.
 
-No webcam? Drag to rotate, shift+drag moves the plane, scroll zooms, click two points for a caliper. No mic? Every voice command has a key: `1`–`4` windows, `S` stent, `O` optimize, `L` lock, `M` measure, `A` suggestions, `E` outcomes, `P` patient view, `W` write plan, `R` reset, `C` switch case. `D` replays a recorded hand stream if tracking dies.
+No webcam? Drag to rotate, shift+drag moves the plane, scroll zooms, click two points for a caliper. No mic? Every voice command has a key: `1`–`4` windows, `S` stent, `O` optimize, `L` lock, `M` measure, `A` suggestions, `E` outcomes, `P` patient view, `W` write plan, `R` reset, `C` switch case, plus the copilot keys above. `D` replays a recorded hand stream if tracking dies.
 
 `npm test` runs the math tests, `npm run e2e` runs the Playwright smoke test. [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) has the 90-second demo, word for word.
 
@@ -137,6 +156,7 @@ What is AI and what isn't:
 | Optimizer | **no**, exhaustive scored search |
 | Stent sizing, verdict, flow | **no**, rules + 1D physics |
 | Command parsing | regex first, **LLM only on a miss** (closed schema, 1.5 s timeout) |
+| Copilot navigation, measurements, plan comparison | **no**: framing geometry, EDT distances and the planning engine; the LLM can only pick a typed command |
 | Patient narration | template, **LLM may reword**; the rewrite is thrown out if any number changes |
 | Plan note | **no**, template from app state |
 | Suggestions, outcomes | **no**, rules over your thresholds + published cohort rates, each with its source |

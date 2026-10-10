@@ -28,7 +28,16 @@ export type Intent =
   | { kind: 'plane'; on: boolean }
   | { kind: 'cut'; orientation: 'sagittal' | 'coronal' | 'axial'; through: string | null; offsetMm: number | null }
   | { kind: 'distance'; a: string; b: string }
-  | { kind: 'query'; what: 'margin' | 'remnant' | 'vessels' };
+  | { kind: 'query'; what: 'margin' | 'remnant' | 'vessels' }
+  | { kind: 'relation'; a: string; b: string }
+  | { kind: 'nearest'; a: string }
+  | { kind: 'focus'; structure: string }
+  | { kind: 'savePlan' }
+  | { kind: 'confirm' }
+  | { kind: 'restorePlan' }
+  | { kind: 'comparePlan' }
+  | { kind: 'previousView' }
+  | { kind: 'cancel' };
 
 /** Every intent kind, for the LLM fallback's JSON schema. */
 export const INTENT_KINDS = [
@@ -51,6 +60,15 @@ export const INTENT_KINDS = [
   'cut',
   'distance',
   'query',
+  'relation',
+  'nearest',
+  'focus',
+  'savePlan',
+  'confirm',
+  'restorePlan',
+  'comparePlan',
+  'previousView',
+  'cancel',
 ] as const;
 
 /* --------------------------------------------------------------- wake word */
@@ -173,6 +191,36 @@ function lengthMm(s: string): number | null {
 export function parseIntent(text: string): Intent | null {
   const s = text.trim().toLowerCase().replace(/[.!?]+$/, '');
   if (!s) return null;
+
+  /* --- copilot: plans, views, navigation (first: their words overlap the
+         mode, plan-note and show rules below) ------------------------------ */
+  if (/^(cancel|stop|never ?mind|abort|forget it|clear( that| it| the view)?)$/.test(s)) return { kind: 'cancel' };
+  if (/^(confirm|yes|yes,? (replace|overwrite)( it)?|overwrite( it)?|replace it|confirm (save|overwrite|it))$/.test(s)) {
+    return { kind: 'confirm' };
+  }
+  if (/\b(compare|comparison|versus|difference between)\b/.test(s)) return { kind: 'comparePlan' };
+  if (/\b(previous|last) view\b|\bundo( that| the view)?\b|\b(go )?back to the (previous|last)\b/.test(s)) {
+    return { kind: 'previousView' };
+  }
+  if (/\b(save|store|bookmark|mark)\b/.test(s) && /\b(plan|baseline|original|view|this|cut)\b/.test(s) && !/\b(write|export|download|note|file)\b/.test(s)) {
+    return { kind: 'savePlan' };
+  }
+  if (/\b(original|baseline|saved)\b/.test(s) && /\b(show|restore|back|return|load|go|bring|open)\b/.test(s)) {
+    return { kind: 'restorePlan' };
+  }
+  if (/\b(closest|nearest)\b/.test(s) && /\b(vessels?|veins?|arter(y|ies)|vasculature)\b/.test(s)) {
+    const named = matchStructures(s).filter((k) => k !== 'vessels' && k !== 'stent');
+    return { kind: 'nearest', a: named[0] ?? 'tumor' };
+  }
+  {
+    const named = matchStructures(s).filter((k) => k !== 'stent');
+    if (/\b(show|display|view|see|look at|visuali[sz]e)\b/.test(s) && named.length >= 2 && /\b(relative to|in relation to|relationship|relation|next to|against|with respect to|and)\b/.test(s)) {
+      return { kind: 'relation', a: named[0], b: named[1] };
+    }
+    if (/\b(focus|zoom( in)?|cent(er|re)|fly|frame|take me|go)\b.*\b(on|to|at|in)\b/.test(s) && named.length === 1) {
+      return { kind: 'focus', structure: named[0] };
+    }
+  }
 
   /* --- modes (before `show`, which would otherwise swallow them) --------- */
   if (/\b(show|explain|tell)\b.*\b(patient|family|them)\b/.test(s) || /\bpatient (view|mode)\b/.test(s)) {
@@ -306,6 +354,12 @@ export const VOICE_HELP: [string, string][] = [
   ['place the stent', 'deploy and size a graft'],
   ['optimize', 're-seat the cut or the stent'],
   ['measure the kidney', 'standard measurement + normal range'],
+  ['show me the tumour relative to the portal vein', 'fly to it, measure, highlight'],
+  ['where is the tumour closest to a vessel', 'search every vessel, show the gap'],
+  ['focus on the left kidney', 'fly to one structure'],
+  ['save this plan / show me the original plan', 'baseline plan'],
+  ['compare this cut to the original', 'side-by-side numbers'],
+  ['go back to the previous view', 'undo the last navigation'],
   ['sagittal cut 10 mm from the tumour', 'place a named plane'],
   ['how far is the tumour from the portal vein', 'closest wall-to-wall gap'],
   ['what’s the margin', 'ask the live plan'],

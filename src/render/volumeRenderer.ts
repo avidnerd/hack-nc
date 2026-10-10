@@ -290,8 +290,10 @@ export class VolumeRenderer {
     const c = state.camera;
     const dir = cameraDir(c.yaw + c.headYaw, c.pitch + c.headPitch);
     this.camera.up.set(...CAMERA_UP);
-    this.camera.position.set(dir[0] * c.dist, dir[1] * c.dist, dir[2] * c.dist);
-    this.camera.lookAt(0, 0, 0);
+    // Orbit the target (the volume centre unless the copilot framed something).
+    const [tx, ty, tz] = c.target;
+    this.camera.position.set(tx + dir[0] * c.dist, ty + dir[1] * c.dist, tz + dir[2] * c.dist);
+    this.camera.lookAt(tx, ty, tz);
 
     if (this.mesh) this.mesh.visible = this.volumeVisible;
     if (u && f && this.volumeVisible) {

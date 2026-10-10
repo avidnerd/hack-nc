@@ -1,0 +1,228 @@
+{
+  "when": "2026-10-10T22:53:06.282Z",
+  "repeats": 5,
+  "summary": [
+    {
+      "task": "distance",
+      "command": "show me the tumor relative to the portal vein",
+      "runs": 5,
+      "medianMs": 479,
+      "maxMs": 495,
+      "interactions": 1,
+      "correct": 5,
+      "detail": "28.3 mm (truth 28.3)"
+    },
+    {
+      "task": "nearest",
+      "command": "show me where the tumor is closest to a major vessel",
+      "runs": 5,
+      "medianMs": 381,
+      "maxMs": 395,
+      "interactions": 1,
+      "correct": 5,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)"
+    },
+    {
+      "task": "restore",
+      "command": "show me the original plan",
+      "runs": 5,
+      "medianMs": 567,
+      "maxMs": 573,
+      "interactions": 1,
+      "correct": 5,
+      "detail": "plane and camera match the saved plan"
+    },
+    {
+      "task": "compare",
+      "command": "compare this cut to the original plan",
+      "runs": 5,
+      "medianMs": 9,
+      "maxMs": 11,
+      "interactions": 1,
+      "correct": 5,
+      "detail": "comparison panel and both planes shown"
+    }
+  ],
+  "rows": [
+    {
+      "task": "distance",
+      "mode": "copilot",
+      "ms": 479,
+      "interactions": 1,
+      "correct": true,
+      "detail": "28.3 mm (truth 28.3)",
+      "command": "show me the tumor relative to the portal vein"
+    },
+    {
+      "task": "distance",
+      "mode": "copilot",
+      "ms": 476,
+      "interactions": 1,
+      "correct": true,
+      "detail": "28.3 mm (truth 28.3)",
+      "command": "show me the tumor relative to the portal vein"
+    },
+    {
+      "task": "distance",
+      "mode": "copilot",
+      "ms": 493,
+      "interactions": 1,
+      "correct": true,
+      "detail": "28.3 mm (truth 28.3)",
+      "command": "show me the tumor relative to the portal vein"
+    },
+    {
+      "task": "distance",
+      "mode": "copilot",
+      "ms": 475,
+      "interactions": 1,
+      "correct": true,
+      "detail": "28.3 mm (truth 28.3)",
+      "command": "show me the tumor relative to the portal vein"
+    },
+    {
+      "task": "distance",
+      "mode": "copilot",
+      "ms": 495,
+      "interactions": 1,
+      "correct": true,
+      "detail": "28.3 mm (truth 28.3)",
+      "command": "show me the tumor relative to the portal vein"
+    },
+    {
+      "task": "nearest",
+      "mode": "copilot",
+      "ms": 383,
+      "interactions": 1,
+      "correct": true,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)",
+      "command": "show me where the tumor is closest to a major vessel"
+    },
+    {
+      "task": "nearest",
+      "mode": "copilot",
+      "ms": 371,
+      "interactions": 1,
+      "correct": true,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)",
+      "command": "show me where the tumor is closest to a major vessel"
+    },
+    {
+      "task": "nearest",
+      "mode": "copilot",
+      "ms": 381,
+      "interactions": 1,
+      "correct": true,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)",
+      "command": "show me where the tumor is closest to a major vessel"
+    },
+    {
+      "task": "nearest",
+      "mode": "copilot",
+      "ms": 377,
+      "interactions": 1,
+      "correct": true,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)",
+      "command": "show me where the tumor is closest to a major vessel"
+    },
+    {
+      "task": "nearest",
+      "mode": "copilot",
+      "ms": 395,
+      "interactions": 1,
+      "correct": true,
+      "detail": "Tumour ↔ intrahepatic vessel 4.8 mm (truth hepatic_vessels 4.8)",
+      "command": "show me where the tumor is closest to a major vessel"
+    },
+    {
+      "task": "restore",
+      "mode": "copilot",
+      "ms": 568,
+      "interactions": 1,
+      "correct": true,
+      "detail": "plane and camera match the saved plan",
+      "command": "show me the original plan"
+    },
+    {
+      "task": "restore",
+      "mode": "copilot",
+      "ms": 567,
+      "interactions": 1,
+      "correct": true,
+      "detail": "plane and camera match the saved plan",
+      "command": "show me the original plan"
+    },
+    {
+      "task": "restore",
+      "mode": "copilot",
+      "ms": 567,
+      "interactions": 1,
+      "correct": true,
+      "detail": "plane and camera match the saved plan",
+      "command": "show me the original plan"
+    },
+    {
+      "task": "restore",
+      "mode": "copilot",
+      "ms": 573,
+      "interactions": 1,
+      "correct": true,
+      "detail": "plane and camera match the saved plan",
+      "command": "show me the original plan"
+    },
+    {
+      "task": "restore",
+      "mode": "copilot",
+      "ms": 567,
+      "interactions": 1,
+      "correct": true,
+      "detail": "plane and camera match the saved plan",
+      "command": "show me the original plan"
+    },
+    {
+      "task": "compare",
+      "mode": "copilot",
+      "ms": 11,
+      "interactions": 1,
+      "correct": true,
+      "detail": "comparison panel and both planes shown",
+      "command": "compare this cut to the original plan"
+    },
+    {
+      "task": "compare",
+      "mode": "copilot",
+      "ms": 8,
+      "interactions": 1,
+      "correct": true,
+      "detail": "comparison panel and both planes shown",
+      "command": "compare this cut to the original plan"
+    },
+    {
+      "task": "compare",
+      "mode": "copilot",
+      "ms": 9,
+      "interactions": 1,
+      "correct": true,
+      "detail": "comparison panel and both planes shown",
+      "command": "compare this cut to the original plan"
+    },
+    {
+      "task": "compare",
+      "mode": "copilot",
+      "ms": 9,
+      "interactions": 1,
+      "correct": true,
+      "detail": "comparison panel and both planes shown",
+      "command": "compare this cut to the original plan"
+    },
+    {
+      "task": "compare",
+      "mode": "copilot",
+      "ms": 9,
+      "interactions": 1,
+      "correct": true,
+      "detail": "comparison panel and both planes shown",
+      "command": "compare this cut to the original plan"
+    }
+  ]
+}

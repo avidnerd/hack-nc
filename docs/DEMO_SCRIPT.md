@@ -1,4 +1,4 @@
-# Scrub+ — 90-second demo script
+# Scrub+ demo script
 
 Chrome, laptop webcam, fullscreen (`F`). Start on the liver case (`/`). If anything
 goes wrong, `R` resets the scene instantly and every step has a key in brackets.
@@ -15,7 +15,32 @@ the bottom of the screen for three seconds, so the audience sees recognition wor
 The left-hand panel always shows the next step and the exact phrase to say, in the
 same order as below, so a judge can follow it with no instructions.
 
-## 1. Liver: measure, cut, fix, check the evidence (45 s)
+## The 90-second copilot demo (primary)
+
+The message: **surgeons shouldn't have to direct someone through a series of clicks to
+see patient-specific anatomy during a sterile procedure. Scrub+ lets them ask for exactly
+what they need and immediately see it.**
+
+Liver case. Every step has a key in brackets.
+
+| # | Do / say | What happens | Key |
+|---|---|---|---|
+| 1 | **Pinch** and drag; **open hand** over the liver | The touchless CT you already know: the body turns, the cut follows your palm, the CT shows on its face | drag / `X` |
+| 2 | "Scrub, show me the tumor relative to the portal vein" | The camera flies in on the gap and the two structures glow while everything else ghosts. A line joins their closest points: "Tumour ↔ portal vein · 28.3 mm". Voice: "The tumour is 28 millimeters from the portal vein." | `J` |
+| 3 | "Scrub, show me where the tumor is closest to a major vessel" | Every segmented vessel is searched at once. It flies to the closest, an intrahepatic vessel 4.8 mm away, and opens a CT section through the gap. The card ranks the other vessels | `N` |
+| 4 | "Scrub, make a sagittal cut 12 millimeters from the tumor" | The plane glides in; margin about 12 mm, remnant about 59 % | (palm) |
+| 5 | "Scrub, save this plan" | "Saved as the original plan." Saving again would ask for "Scrub, confirm" | `B` |
+| 6 | Move the cut with your **open hand** (tilt or slide it) | The numbers change live | ↑ / ↓ |
+| 7 | "Scrub, compare this to the original plan" | The original plane appears dashed next to the current one. The card shows margin, remnant, resected mL, vessels crossed and the plane change, side by side. Voice: "Compared with the saved plan, the current plane keeps … percentage points … liver, …" | `Y` |
+| 8 | "Scrub, show me the original plan" | The saved plane and view come back exactly, with the same numbers | `U` |
+| 9 | "Scrub, go back to the previous view" | Undoes the last navigation | `Backspace` |
+
+At any point the camera is still yours: pinch-drag rotates around what the copilot framed,
+two pinches zoom, and "Scrub, cancel" (`Esc`) clears the highlight.
+
+## Extended demo
+
+### 1. Liver: measure, cut, fix, check the evidence (45 s)
 
 | Do / say | What happens | Fallback |
 |---|---|---|
@@ -30,7 +55,7 @@ Optional: "Scrub, what do you suggest" (`A`) before optimizing lists what to cha
 (margin under target, vessel divided, remnant under minimum). Two index fingers give a
 live caliper; "bone window" (`2`) changes the CT window.
 
-## 2. Aorta: an infrarenal stent seal (35 s)
+### 2. Aorta: an infrarenal stent seal (35 s)
 
 | Do / say | What happens | Fallback |
 |---|---|---|
@@ -41,7 +66,7 @@ live caliper; "bone window" (`2`) changes the CT window.
 | "Scrub, optimize" | The stent slides back to the nearest sealing seat | `O` |
 | "Scrub, what are the outcomes" | Published endoleak rates for necks in this band (Stather 2013, Bernardini 2022) | `E` |
 
-## 3. "Scrub, show the patient" (10 s)
+### 3. "Scrub, show the patient" (10 s)
 
 | Do / say | What happens | Fallback |
 |---|---|---|

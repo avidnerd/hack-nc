@@ -31,6 +31,15 @@ Reply with ONE JSON object and nothing else. Allowed objects:
 {"kind":"cut","orientation":"sagittal"|"coronal"|"axial","through":"tumor"|"liver"|"aorta"|"kidneys"|"renal_arteries"|null,"offsetMm":number|null}
 {"kind":"distance","a":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"liver"|"kidneys","b":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"liver"|"kidneys"}
 {"kind":"query","what":"margin"|"remnant"|"vessels"}
+{"kind":"relation","a":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"hepatic_vessels"|"liver"|"kidneys"|"kidney_left"|"kidney_right","b":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"hepatic_vessels"|"liver"|"kidneys"|"kidney_left"|"kidney_right"}
+{"kind":"nearest","a":"tumor"|"liver"|"kidneys"}
+{"kind":"focus","structure":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"hepatic_vessels"|"liver"|"kidneys"|"kidney_left"|"kidney_right"}
+{"kind":"savePlan"}
+{"kind":"confirm"}
+{"kind":"restorePlan"}
+{"kind":"comparePlan"}
+{"kind":"previousView"}
+{"kind":"cancel"}
 {"kind":"none"}
 Use {"kind":"none"} if the command matches nothing.`;
 
@@ -67,7 +76,22 @@ export function validate(o: Record<string, unknown>): Intent | null {
     case 'writePlan':
     case 'suggest':
     case 'outcomes':
+    case 'savePlan':
+    case 'restorePlan':
+    case 'comparePlan':
+    case 'previousView':
+    case 'cancel':
       return { kind: o.kind };
+    // Confirming an overwrite is destructive: only an explicit spoken
+    // "confirm" (the regex grammar) may do it, never a model's guess.
+    case 'confirm':
+      return null;
+    case 'relation':
+      return typeof o.a === 'string' && typeof o.b === 'string' ? { kind: 'relation', a: o.a, b: o.b } : null;
+    case 'nearest':
+      return { kind: 'nearest', a: typeof o.a === 'string' ? o.a : 'tumor' };
+    case 'focus':
+      return typeof o.structure === 'string' ? { kind: 'focus', structure: o.structure } : null;
     case 'measure':
       return { kind: 'measure', what: typeof o.what === 'string' ? o.what : 'tumor' };
     case 'cut': {
