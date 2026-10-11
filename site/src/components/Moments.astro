@@ -10,7 +10,7 @@ const fmt = (v: number | null, digits = 0) => (v === null ? '—' : v.toFixed(di
     <h2 class="visually-hidden" id="moments-label">Two planning tasks</h2>
   </div>
   {
-    MOMENTS.map((m, i) => (
+    MOMENTS.map((m) => (
       <article class="moment" data-moment aria-labelledby={`moment-${m.key}`}>
         <div class="wrap grid">
           <header class="copy">
