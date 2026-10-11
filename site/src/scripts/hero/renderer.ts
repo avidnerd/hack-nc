@@ -89,6 +89,8 @@ export class HeroRenderer {
   dist = 1.95;
   /** Fraction of the width the render centre sits right of the page centre. */
   shift = 0.27;
+  /** Pixels the render centre sits below the canvas centre (set from the copy). */
+  shiftY = 0;
 
   private frameMs = 12;
   private steps = 192;
@@ -162,7 +164,7 @@ export class HeroRenderer {
     this.camera.fov = w / h < 1.2 ? 44 : 32;
     // Asymmetric layout: the torso sits over columns 6 to 12, clear of the
     // headline, without moving the camera (which would change the view).
-    this.camera.setViewOffset(w, h, -w * this.shift, 0, w, h);
+    this.camera.setViewOffset(w, h, -w * this.shift, -this.shiftY, w, h);
     this.camera.updateProjectionMatrix();
   }
 

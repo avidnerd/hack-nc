@@ -7,7 +7,7 @@
 
 <section class="section" aria-labelledby="problem-label">
   <div class="wrap grid">
-    <h2 class="h2 lede" id="problem-label">A surgeon’s hands are sterile. The scan is on a screen they can’t touch.</h2>
+    <h2 class="h2 lede" id="problem-label">During surgery, doctors often need to check the patient’s scans. They can’t touch the computer without breaking sterility, so they have to ask someone else to do it for them.</h2>
     <div class="prose">
       <p>Operating-room time costs <span class="fig">$36–37 a minute</span><a class="ref" href="#ref-1">1</a>.</p>
       <p>
@@ -24,9 +24,13 @@
 </section>
 
 <style>
+  /* A full sentence, so a step below the section display size. */
   .lede {
-    grid-column: 1 / span 9;
+    grid-column: 1 / span 10;
     margin-bottom: var(--s-8);
+    font-size: var(--fs-44);
+    line-height: 1.12;
+    max-width: 30ch;
   }
   .prose {
     grid-column: 5 / span 7;
