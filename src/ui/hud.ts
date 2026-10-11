@@ -79,7 +79,7 @@ export class Hud {
     const line = document.createElement('div');
     const valueEl = document.createElement('span');
     valueEl.className = 'num-value dim';
-    valueEl.textContent = '—';
+    valueEl.textContent = '--';
     const unitEl = document.createElement('span');
     unitEl.className = 'num-unit';
     unitEl.textContent = unit;
@@ -133,7 +133,8 @@ export class Hud {
     const aorta = state.data?.meta.kind === 'aorta';
     this.planeShown = state.plane.on;
     // A copilot viewing section is not a resection either.
-    const liver = !aorta && !state.viewSection;
+    // The numbers describe a cut, so they appear once there is one.
+    const liver = state.data?.meta.kind === 'liver' && state.plane.on && !state.viewSection;
     for (const k of ['remnant', 'margin', 'vessels']) this.setCellVisible(k, liver);
     this.setCellVisible('neck', !!state.stent);
     this.setCellVisible('flow', aorta && state.flowDrop !== null);
@@ -160,7 +161,7 @@ export class Hud {
     on('thresholds', () => this.syncNumbers());
 
     on('mode', (m) => {
-      this.badgeEl.textContent = m.toUpperCase();
+      this.badgeEl.textContent = m === 'patient' ? 'Patient' : 'Surgeon';
       this.badgeEl.classList.toggle('patient', m === 'patient');
       this.numbersEl.classList.toggle('hidden', m === 'patient');
       this.calloutsEl.hidden = m !== 'patient';
@@ -202,7 +203,7 @@ export class Hud {
       this.showResponse('');
       for (const c of this.cells.values()) {
         c.blank = true;
-        c.valueEl.textContent = '—';
+        c.valueEl.textContent = '--';
         c.valueEl.className = 'num-value dim';
         c.noteEl.textContent = '';
         delete c.root.dataset.tone;
@@ -243,7 +244,7 @@ export class Hud {
       this.setCellVisible('flow', state.data?.meta.kind === 'aorta');
       this.retarget('flow', state.flowDrop, state.flowDrop > 100.5 ? 'warn' : 'ok');
       const fc = this.cells.get('flow');
-      if (fc) fc.noteEl.textContent = state.stent ? 'native = 100 · illustrative 1D model, not CFD' : 'native vessel · illustrative 1D model';
+      if (fc) fc.noteEl.textContent = state.stent ? 'Native vessel = 100. Illustrative 1D model, not CFD.' : 'Native vessel. Illustrative 1D model.';
     }
 
     // Threshold ticks: where "safe" starts on each bar.
@@ -256,7 +257,7 @@ export class Hud {
     if (s) {
       this.retarget('neck', s.neckMm, s.seals ? 'ok' : 'bad');
       const cell = this.cells.get('neck');
-      if (cell) cell.noteEl.textContent = `${s.diameterMm.toFixed(0)} mm · +${s.oversizePct.toFixed(0)}%`;
+      if (cell) cell.noteEl.textContent = `${s.diameterMm.toFixed(0)} mm device, ${s.oversizePct.toFixed(0)}% oversize`;
     }
   }
 
@@ -355,13 +356,14 @@ export class Hud {
   /* ------------------------------------------------------------ help overlay */
 
   private buildHelp(): void {
-    const section = (title: string, rows: [string, string][]) => {
+    // Keys and gestures read as key caps; spoken phrases read as quotes.
+    const section = (title: string, rows: [string, string][], spoken = false) => {
       const h = document.createElement('h2');
       h.textContent = title;
       const grid = document.createElement('div');
       grid.className = 'help-grid';
       for (const [k, v] of rows) {
-        const kb = document.createElement('kbd');
+        const kb = document.createElement(spoken ? 'q' : 'kbd');
         kb.textContent = k;
         const d = document.createElement('div');
         d.textContent = v;
@@ -384,13 +386,13 @@ export class Hud {
       ['scroll', 'zoom'],
       ['click ×2', 'caliper between two points'],
     ]));
-    right.append(...section('Voice — say “Scrub, …”', VOICE_HELP));
+    right.append(...section('Voice (start with “Scrub”)', VOICE_HELP, true));
     right.append(...section('Keyboard', SHORTCUT_HELP));
 
     cols.append(left, right);
 
     const title = document.createElement('h2');
-    title.textContent = 'Scrub+ — controls';
+    title.textContent = 'Scrub+ controls';
     this.helpEl.append(title, cols);
   }
 

@@ -47,7 +47,7 @@ describe('caliper snapping', () => {
   it('names a span between two structures', () => {
     const s = snapCaliper(twoBoxes(), [21, 10, 10], [28, 10, 10]);
     expect(Math.abs(s.mm - 10)).toBeLessThanOrEqual(1);
-    expect(s.label).toBe('tumor ↔ portal_vein');
+    expect(s.label).toBe('tumor to portal_vein');
   });
 
   it('leaves ends alone when no wall is near', () => {

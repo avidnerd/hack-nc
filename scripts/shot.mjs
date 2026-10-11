@@ -21,7 +21,7 @@ function flag(name, fallback = null) {
   return i >= 0 && rest[i + 1] ? rest[i + 1] : fallback;
 }
 
-const url = flag('url', 'http://localhost:5173/');
+const url = flag('url', 'http://localhost:5173/?tutorial=0');
 const waitMs = Number(flag('wait', '2600'));
 const width = Number(flag('w', '1280'));
 const height = Number(flag('h', '800'));

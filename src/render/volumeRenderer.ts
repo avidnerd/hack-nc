@@ -71,7 +71,7 @@ export class VolumeRenderer {
       alpha: false,
       powerPreference: 'high-performance',
     });
-    this.renderer.setClearColor(0x06080c, 1);
+    this.renderer.setClearColor(0x0e0f11, 1);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     this.renderer.localClippingEnabled = true;

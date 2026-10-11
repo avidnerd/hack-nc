@@ -182,7 +182,7 @@ export class Overlays {
       }
       tag.hidden = false;
       const name = state.data?.meta.labels.find((l) => l.id === c.id)?.name ?? 'vessel';
-      tag.textContent = `✕ ${name}`;
+      tag.textContent = `${name}, divided`;
       tag.style.transform = `translate(${s.x}px, ${s.y}px) translate(10px, -130%)`;
     });
   }
@@ -202,7 +202,7 @@ export class Overlays {
     setPositions(this.caliperLine.geometry, obj);
     setPositions(this.caliperEnds.geometry, obj);
     if (pts.length === 2) {
-      this.caliperLabel.textContent = c.label ? `${c.label} · ${c.mm.toFixed(1)} mm` : `${c.mm.toFixed(1)} mm`;
+      this.caliperLabel.textContent = c.label ? `${c.label}: ${c.mm.toFixed(1)} mm` : `${c.mm.toFixed(1)} mm`;
     } else {
       this.caliperLabel.hidden = true;
     }

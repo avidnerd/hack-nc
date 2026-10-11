@@ -4,7 +4,7 @@
  *   snapCaliper        a caliper endpoint within a few mm of a structure's wall,
  *                      or of a landmark (renal artery origin, tumour extreme),
  *                      lands exactly on it, and the reading names what was
- *                      measured: "Tumour · 41.2 mm", "Tumour ↔ Portal vein"
+ *                      measured: "Tumour: 41.2 mm", "Tumour to Portal vein"
  *   structureDistance  closest wall-to-wall distance between two structures
  *                      ("how far is the tumour from the portal vein"), with the
  *                      two closest points to draw
@@ -143,7 +143,7 @@ export function snapCaliper(d: CaseData, a: Vec3, b: Vec3): SnappedCaliper {
   let label: string | null = null;
   if (sa.landmark === 'Tumour edge' && sb.landmark === 'Tumour edge') label = 'Tumour, longest axial';
   else if (!sa.landmark && !sb.landmark && sa.inner && sa.inner === sb.inner) label = nameOf(d, sa.inner);
-  else if (end(sa) && end(sb)) label = `${end(sa)} ↔ ${end(sb)}`;
+  else if (end(sa) && end(sb)) label = `${end(sa)} to ${end(sb)}`;
   return { a: sa.p, b: sb.p, mm, label };
 }
 

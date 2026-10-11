@@ -138,7 +138,7 @@ export class Bench {
       }
       case 'compare': {
         const kicker = document.querySelector('.info-card.show .info-kicker')?.textContent ?? '';
-        if (!/compare plans/i.test(kicker) || !state.ghostPlane) return null;
+        if (!/plan comparison/i.test(kicker) || !state.ghostPlane) return null;
         return { correct: true, detail: 'comparison panel and both planes shown' };
       }
     }

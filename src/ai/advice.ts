@@ -17,7 +17,7 @@ import type { CardContent, CardRow } from '../ui/infoCard.ts';
 import type { PlanMetrics, StentState, Thresholds } from '../types.ts';
 
 export interface AdviceFacts {
-  caseKind: 'liver' | 'aorta';
+  caseKind: 'liver' | 'aorta' | 'scan';
   planeOn: boolean;
   metrics: PlanMetrics | null;
   stent: StentState | null;
@@ -44,7 +44,21 @@ const NOT_A_PREDICTION =
 
 /* ------------------------------------------------------------- suggestions */
 
+/** An uploaded scan without a liver segmentation has no plan to judge. */
+function noPlan(kicker: string): Advice {
+  return {
+    card: {
+      kicker,
+      title: 'Not available for this scan',
+      rows: [],
+      notes: ['Suggestions and outcomes need a liver segmentation (upload a label map with 1 = liver, 2 = tumour) or a stent case.'],
+    },
+    speech: 'That needs a liver segmentation. This scan has none.',
+  };
+}
+
 export function suggestions(f: AdviceFacts): Advice {
+  if (f.caseKind === 'scan') return noPlan('Suggestions');
   return f.caseKind === 'aorta' ? stentSuggestions(f) : liverSuggestions(f);
 }
 
@@ -79,7 +93,7 @@ function liverSuggestions(f: AdviceFacts): Advice {
     rows.push({ label: 'Constraints met', value: 'ready', ref: `Margin ≥${t.marginMin} mm, remnant ≥${t.remnantMin} %, no ≥5 mm vessel divided. Lock it, then "write the plan" or "show the patient".` });
     said.push('This cut meets your margin, remnant and vessel constraints. Lock it, then write the plan.');
   }
-  rows.push({ label: 'Not assessable from CT', value: '—', ref: 'Liver function (bilirubin, INR, ICG clearance), background cirrhosis or chemotherapy injury, and Couinaud segment anatomy. Confirm with intraoperative ultrasound.' });
+  rows.push({ label: 'Not assessable from CT', value: '', ref: 'Liver function (bilirubin, INR, ICG clearance), background cirrhosis or chemotherapy injury, and Couinaud segment anatomy. Confirm with intraoperative ultrasound.' });
   return {
     card: { kicker: 'Suggestions', title: 'Liver resection plan', rows, foot: 'Rule-based from your thresholds. Research and teaching use only.' },
     speech: said.slice(0, 2).join(' '),
@@ -122,7 +136,7 @@ function stentSuggestions(f: AdviceFacts): Advice {
       ref: `${neckD < 17 ? 'Below' : 'At'} the lower limit of most devices’ IFU diameter range (17–32 mm). This is lumen; the outer wall reads 3–6 mm larger, so measure that first.`,
     });
   }
-  rows.push({ label: 'Not modelled here', value: '—', ref: 'Outer-wall diameter, thrombus and calcium, iliac landing zones and access vessels; a real plan uses thin-slice CTA.' });
+  rows.push({ label: 'Not modelled here', value: '', ref: 'Outer-wall diameter, thrombus and calcium, iliac landing zones and access vessels; a real plan uses thin-slice CTA.' });
   return {
     card: { kicker: 'Suggestions', title: 'Infrarenal stent seal', rows, foot: 'Demonstration anatomy (no aneurysm). Research and teaching use only.' },
     speech,
@@ -132,6 +146,7 @@ function stentSuggestions(f: AdviceFacts): Advice {
 /* ---------------------------------------------------------------- outcomes */
 
 export function outcomes(f: AdviceFacts): Advice {
+  if (f.caseKind === 'scan') return noPlan('Outcomes');
   return f.caseKind === 'aorta' ? stentOutcomes(f) : liverOutcomes(f);
 }
 
@@ -181,7 +196,7 @@ function liverOutcomes(f: AdviceFacts): Advice {
   const band = low ? 'below' : 'above';
   return {
     card: {
-      kicker: 'Outcomes · published cohorts',
+      kicker: 'Published outcomes',
       title: 'What similar plans led to',
       rows,
       notes: [NOT_A_PREDICTION, 'Validated risk tools (MELD, ALBI, ICG clearance, ACS NSQIP) need lab values a CT does not carry.'],
@@ -234,7 +249,7 @@ function stentOutcomes(f: AdviceFacts): Advice {
   }
   return {
     card: {
-      kicker: 'Outcomes · published cohorts',
+      kicker: 'Published outcomes',
       title: 'What similar seals led to',
       rows,
       notes: [NOT_A_PREDICTION, 'Lumen-based sizing on demonstration anatomy without an aneurysm.'],

@@ -47,7 +47,7 @@ export interface CaseMeta {
   id: string;
   name: string;
   /** Which demo moments this case serves. */
-  kind: 'liver' | 'aorta';
+  kind: 'liver' | 'aorta' | 'scan';
   /** Grid dimensions [nx, ny, nz] of volume.u8 and labels.u8. */
   shape: Vec3;
   /** Millimetres per voxel along each axis. */

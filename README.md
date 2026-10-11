@@ -65,6 +65,19 @@ The main idea is being able to say "scrub, show me..." instead of manually findi
 
 The language model interprets requests that fall outside the predefined voice commands, while all measurements are calculated directly from the CT data and segmentation masks.
 
+# your own scans
+
+You can load your own CT with the "Upload CT" button, the `I` key, or by dropping a `.nii` / `.nii.gz` file on the page. It is read in the browser and never uploaded anywhere.
+
+- A CT on its own can be rotated, cut, windowed and measured.
+- If you also add a label map that uses the MSD liver convention (1 = liver, 2 = tumor), the planning tools and the copilot turn on. Other label values are shown as numbered structures instead of guessed organ names.
+
+Segmentation is not done in the browser, so a scan without labels gets the viewing tools only. DICOM needs converting to NIfTI first (for example with dcm2niix).
+
+# learning the gestures
+
+On the first visit, a short tutorial runs on a simple practice object. Each step checks what your hand is doing and only moves on once the gesture works, with a hint when the pose is wrong. Every step also shows the mouse or keyboard alternative, and you can skip it. Press `H` or click "Practice" to run it again.
+
 # functions
 
 These are the gesture and voice-control demos from the app.
@@ -167,6 +180,7 @@ Open the local URL shown in the terminal and allow camera and microphone access.
 - No webcam: drag to rotate, shift-drag to move the plane, scroll to zoom, and click two points to measure.
 - No microphone: the app has keyboard shortcuts.
 - Press `D` to replay a recorded gesture sequence.
+- Press `H` for the gesture tutorial and `I` to upload a CT. Add `?tutorial=0` to the URL to skip the tutorial.
 - Copilot shortcuts: `J` for anatomical relationship, `N` for nearest vessel, `B` to save a plan, `U` to restore it, `Y` to compare, `Backspace` for the previous view, and `Esc` to cancel.
 
 To run the tests and benchmark:

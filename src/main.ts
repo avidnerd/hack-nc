@@ -44,6 +44,9 @@ import { measureStructure } from './planning/anatomyMeasure.ts';
 import { idsFor, namedCut, renalLevelCut, type Orientation } from './planning/smartMeasure.ts';
 import { Copilot } from './copilot/copilot.ts';
 import { Bench } from './copilot/bench.ts';
+import { Tutorial, tutorialDone } from './tutorial/tutorial.ts';
+import { makePhantom } from './tutorial/phantom.ts';
+import { caseFromFiles, installDrop, pickFiles } from './io/upload.ts';
 import { InfoCard } from './ui/infoCard.ts';
 import { outcomes, suggestions, type AdviceFacts } from './ai/advice.ts';
 import { VolumeRenderer } from './render/volumeRenderer.ts';
@@ -65,7 +68,7 @@ import { parseIntent, type Intent } from './voice/intents.ts';
 import { SpeechInput } from './voice/stt.ts';
 import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
-import type { Plane, PresetName, Vec3 } from './types.ts';
+import type { CaseData, Plane, PresetName, Vec3 } from './types.ts';
 
 /* ------------------------------------------------------------------ globals */
 
@@ -173,7 +176,11 @@ async function boot(): Promise<void> {
       const on = hands.toggleRecording();
       toast(on ? 'Recording landmarks (Shift+D to stop)' : 'Saved landmarks.json', 'info');
     },
+    tutorial: () => void tutorial.open(),
+    upload: () => void pickAndUpload(),
   });
+  installDrop((files) => void uploadScan(files));
+  installTopActions();
 
   installMouse(canvas, {
     setMoving: (m) => {
@@ -187,9 +194,14 @@ async function boot(): Promise<void> {
   hud.hideLoader();
   requestAnimationFrame(loop);
 
+  // First visit: the gesture tutorial on the practice object, unless a case
+  // was asked for in the URL or the tutorial was turned off (?tutorial=0).
+  const params = new URLSearchParams(location.search);
+  const t = params.get('tutorial');
+  if (t === '1' || (t !== '0' && !params.has('case') && !tutorialDone())) void tutorial.open();
+
   // The camera prompt and model download happen after first paint, so a
   // refused camera never delays the volume.
-  const params = new URLSearchParams(location.search);
   await loadGestureNet();
   if (params.get('hands') !== 'off') void startHands();
 
@@ -197,6 +209,61 @@ async function boot(): Promise<void> {
   on('response', (text) => speech.speak(text));
   if (params.get('voice') !== 'off') stt.start();
   console.info(`[boot] LLM: ${llmName()}`);
+}
+
+/* --------------------------------------------------- tutorial and uploads */
+
+const tutorial = new Tutorial({
+  loadPractice: () => loadCaseData(makePhantom(), 'practice'),
+  finish: (choice) => {
+    if (choice === 'upload') void switchCase('liver').then(() => pickAndUpload());
+    else void switchCase(choice);
+  },
+});
+
+async function pickAndUpload(): Promise<void> {
+  const files = await pickFiles();
+  if (files.length) await uploadScan(files);
+}
+
+/** Load a CT (and optional label map) from the user's own files. */
+async function uploadScan(files: File[]): Promise<void> {
+  let shown = '';
+  try {
+    const data = await caseFromFiles(files, (label) => {
+      if (label !== shown) toast(`${label}…`, 'info');
+      shown = label;
+    });
+    await loadCaseData(data, 'upload');
+    const n = data.meta.labels.length;
+    const what =
+      data.meta.kind === 'liver'
+        ? 'Liver labels found: planning is on.'
+        : n
+          ? `${n} labelled structure${n === 1 ? '' : 's'}, unnamed.`
+          : 'No labels: viewing, cutting and measuring.';
+    say(`Scan loaded. ${what}`);
+  } catch (err) {
+    console.error('[upload]', err);
+    say(err instanceof Error ? err.message : 'Could not read that file.');
+  }
+}
+
+/** Two small buttons by the case name: practice again, upload a scan. */
+function installTopActions(): void {
+  const bar = document.createElement('div');
+  bar.className = 'top-actions';
+  const mk = (text: string, title: string, fn: () => void) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.title = title;
+    b.addEventListener('click', fn);
+    bar.append(b);
+  };
+  mk('Practice', 'Gesture tutorial (H)', () => void tutorial.open());
+  mk('Upload CT', 'Load a .nii / .nii.gz CT, optionally with a label map (I); or drop the files anywhere', () => void pickAndUpload());
+  document.body.append(bar);
 }
 
 /**
@@ -280,64 +347,8 @@ async function playDemo(): Promise<void> {
 
 async function switchCase(id: string): Promise<void> {
   const known = CASES.find((c) => c.id === id) ?? CASES[0];
-  if (state.mode === 'patient') exitPatientMode();
-  planeTween = null;
   try {
-    const data = await loadCase(known.id);
-    state.caseId = known.id;
-    set('data', data);
-    // The copilot's view of the last case (framing, focus, sections) goes with it.
-    copilot.onCase();
-    patch('camera', { target: [0, 0, 0] });
-    set('focus', []);
-    set('viewSection', false);
-    set('ghostPlane', null);
-
-    // Apply the case's own defaults before the first frame is drawn.
-    state.preset = data.meta.defaultPreset;
-    state.windowLevel = { ...data.meta.windowPresets[state.preset] };
-    state.visible = defaultVisibility(data);
-    emit('visible', state.visible);
-    emit('preset', state.preset);
-    emit('windowLevel', state.windowLevel);
-
-    renderer.setCase(data);
-    const tex = renderer.textures();
-    if (renderer.frame && tex) {
-      anatomy.setCase(data, renderer.frame, tex);
-      // No meshes (an old data folder): fall back to the ray-marched volume.
-      renderer.volumeVisible = !anatomy.hasMeshes;
-    }
-    if (renderer.frame) {
-      overlays.setFrame(renderer.frame);
-      stents.setCase(data, renderer.frame);
-    }
-
-    // Build the planning grid: a majority-downsampled label volume plus the
-    // tumour distance transform. One EDT over ~800k voxels, so it is measured
-    // rather than assumed.
-    setLoading('Building planning grid', 94);
-    const t0 = performance.now();
-    grid = new PlanningGrid(data);
-    engine = contextFrom(grid);
-    optimizer.setGrid(grid, engine);
-    console.info(
-      `[planning] ${grid.nx}x${grid.ny}x${grid.nz} grid (factor ${grid.factor}), ` +
-        `${grid.organIdx.length} organ / ${grid.vesselIdx.length} vessel voxels, ` +
-        `built in ${(performance.now() - t0).toFixed(0)} ms`,
-    );
-
-    // Start the cut through the middle of the organ so turning the plane on
-    // always does something visible.
-    const centroid = grid.organCentroid();
-    if (centroid) {
-      state.plane = { ...planeThrough([1, 0, 0], centroid), on: false, locked: false };
-      emit('plane', state.plane);
-    }
-
-    lastPlaneKey = '';
-    recomputeMetrics();
-    hud.syncNumbers();
+    await loadCaseData(await loadCase(known.id), known.id);
   } catch (err) {
     console.error('[boot] case load failed', err);
     set('phase', 'error');
@@ -347,6 +358,68 @@ async function switchCase(id: string): Promise<void> {
     );
     throw err;
   }
+}
+
+/**
+ * Put any case on screen: a shipped one, an uploaded scan, or the tutorial's
+ * practice object. Everything downstream sees the same CaseData either way.
+ */
+async function loadCaseData(data: CaseData, id: string): Promise<void> {
+  if (state.mode === 'patient') exitPatientMode();
+  planeTween = null;
+  state.caseId = id;
+  set('data', data);
+  // The copilot's view of the last case (framing, focus, sections) goes with it.
+  copilot.onCase();
+  patch('camera', { target: [0, 0, 0] });
+  set('focus', []);
+  set('viewSection', false);
+  set('ghostPlane', null);
+
+  // Apply the case's own defaults before the first frame is drawn.
+  state.preset = data.meta.defaultPreset;
+  state.windowLevel = { ...data.meta.windowPresets[state.preset] };
+  state.visible = defaultVisibility(data);
+  emit('visible', state.visible);
+  emit('preset', state.preset);
+  emit('windowLevel', state.windowLevel);
+
+  renderer.setCase(data);
+  const tex = renderer.textures();
+  if (renderer.frame && tex) {
+    anatomy.setCase(data, renderer.frame, tex);
+    // No meshes (an old data folder): fall back to the ray-marched volume.
+    renderer.volumeVisible = !anatomy.hasMeshes;
+  }
+  if (renderer.frame) {
+    overlays.setFrame(renderer.frame);
+    stents.setCase(data, renderer.frame);
+  }
+
+  // Build the planning grid: a majority-downsampled label volume plus the
+  // tumour distance transform. One EDT over ~800k voxels, so it is measured
+  // rather than assumed.
+  setLoading('Building planning grid', 94);
+  const t0 = performance.now();
+  grid = new PlanningGrid(data);
+  engine = contextFrom(grid);
+  optimizer.setGrid(grid, engine);
+  console.info(
+    `[planning] ${grid.nx}x${grid.ny}x${grid.nz} grid (factor ${grid.factor}), ` +
+      `${grid.organIdx.length} organ / ${grid.vesselIdx.length} vessel voxels, ` +
+      `built in ${(performance.now() - t0).toFixed(0)} ms`,
+  );
+
+  // Start the cut through the middle of the organ (or of the scan, when
+  // nothing is segmented) so turning the plane on always does something.
+  const m = data.meta;
+  const centre: Vec3 = [0, 1, 2].map((k) => m.origin[k] + ((m.shape[k] - 1) * m.spacing[k]) / 2) as Vec3;
+  state.plane = { ...planeThrough([1, 0, 0], grid.organCentroid() ?? centre), on: false, locked: false };
+  emit('plane', state.plane);
+
+  lastPlaneKey = '';
+  recomputeMetrics();
+  hud.syncNumbers();
 }
 
 /* -------------------------------------------------------------------- loop */
@@ -417,11 +490,16 @@ function recomputeMetrics(): void {
   if (key === lastPlaneKey) return;
   lastPlaneKey = key;
 
+  // An uploaded scan without a liver label has nothing to resect.
+  if (!grid || grid.organIdx.length === 0) {
+    if (state.metrics !== null) set('metrics', null);
+    return;
+  }
   const metrics = evaluatePlane(engine, { n: p.n, d: p.d });
   // The whole-structure glow is for named trunks (portal vein, IVC). The
   // intrahepatic tree is one label, so lighting it would light every branch;
   // the overlay marks the divided branch itself instead.
-  const viewOnly = state.data?.meta.kind === 'aorta' || state.viewSection;
+  const viewOnly = state.data?.meta.kind !== 'liver' || state.viewSection;
   renderer.proximityLabel = viewOnly || metrics.vesselId === HEPATIC_TREE_ID ? 0 : metrics.vesselId;
   set('metrics', metrics);
 }
@@ -564,10 +642,15 @@ function namedCutIntent(orientation: Orientation, through: string | null, offset
     say('The cut is locked. Unlock it first.');
     return;
   }
-  const subject = through ?? (data.meta.kind === 'aorta' ? 'aorta' : 'tumor');
+  // An uploaded scan with nothing named to cut around: through its centre.
+  const centred = data.meta.kind === 'scan' && !through;
+  const subject = through ?? (data.meta.kind === 'aorta' ? 'aorta' : data.meta.kind === 'scan' ? 'scan' : 'tumor');
   const ctx = engine;
-  const plane =
-    subject === 'renal_arteries'
+  const axis = orientation === 'sagittal' ? 0 : orientation === 'coronal' ? 1 : 2;
+  const centre = data.meta.origin[axis] + ((data.meta.shape[axis] - 1) * data.meta.spacing[axis]) / 2;
+  const plane = centred
+    ? { n: [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0] as Vec3, d: centre }
+    : subject === 'renal_arteries'
       ? renalLevelCut(data)
       : namedCut(data, orientation, idsFor(data, subject), offsetMm, (pl) => evaluatePlane(ctx, pl, false).remnantPct);
   if (!plane) {
@@ -675,7 +758,7 @@ function enterPatientMode(): void {
     caseKind: data.meta.kind,
     metrics: state.plane.on ? state.metrics : null,
     stent: state.stent,
-    organ: data.meta.kind === 'liver' ? 'liver' : 'aorta',
+    organ: data.meta.kind === 'liver' ? 'liver' : data.meta.kind === 'aorta' ? 'aorta' : 'body',
   };
   hud.setCallouts(patientCallouts(facts));
   void patientNarrationText(facts).then((text) => {
@@ -883,6 +966,8 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       if (state.data?.meta.kind === 'aorta') {
         if (state.stent) stents.optimize();
         else say('Place the stent first.');
+      } else if (state.data?.meta.kind === 'scan') {
+        say('Optimizing a cut needs a liver segmentation. This scan has none.');
       } else void optimizePlan();
       break;
 
@@ -930,6 +1015,10 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
 
     case 'cancel':
       copilot.cancel();
+      break;
+
+    case 'tutorial':
+      void tutorial.open();
       break;
 
     case 'query':

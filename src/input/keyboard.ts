@@ -37,6 +37,8 @@ export const SHORTCUT_HELP: [string, string][] = [
   ['R', 'reset'],
   ['D', 'play the recorded demo'],
   ['K', 'anatomy / CT volume view'],
+  ['H', 'gesture tutorial (practice object)'],
+  ['I', 'upload a CT (.nii / .nii.gz, optional label map); or drop the files'],
   ['Shift+G', 'teach gestures (labelled recording)'],
   ['V', 'webcam preview'],
   ['F', 'fullscreen'],
@@ -53,6 +55,10 @@ export interface KeyboardHooks {
   toggleView: () => void;
   /** Starts/stops the landmark recorder (`shift+D`). */
   toggleRecorder: () => void;
+  /** Opens the gesture tutorial on the practice object (`H`). */
+  tutorial: () => void;
+  /** Opens the CT upload picker (`I`, for import). */
+  upload: () => void;
 }
 
 export function installKeyboard(hooks: KeyboardHooks): void {
@@ -168,6 +174,14 @@ export function installKeyboard(hooks: KeyboardHooks): void {
       case 'k':
       case 'K':
         hooks.toggleView();
+        break;
+      case 'h':
+      case 'H':
+        hooks.tutorial();
+        break;
+      case 'i':
+      case 'I':
+        hooks.upload();
         break;
       case 'v':
       case 'V':

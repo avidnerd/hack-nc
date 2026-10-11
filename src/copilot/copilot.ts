@@ -184,13 +184,13 @@ export class Copilot {
         say(`The ${an} and the ${bn} are more than 6 centimeters apart.`);
         return;
       }
-      const label = `${cap(an)} ↔ ${bn}`;
+      const label = `${cap(an)} to ${bn}`;
       this.showRelationship(aIds, bIds, r, label, this.extraFor(aIds, bIds));
       const mm = Math.round(r.mm);
       const margin = state.thresholds.marginMin;
       const vesselish = aIds.concat(bIds).some((id) => d.meta.labels.find((l) => l.id === id)?.role === 'vessel');
       this.deps.showCard({
-        kicker: 'Copilot · relationship',
+        kicker: 'Relationship',
         title: label,
         rows: [{ label: 'Closest wall-to-wall gap', value: r.touching ? 'in contact' : `${r.mm.toFixed(1)} mm` }],
         notes: [
@@ -229,7 +229,7 @@ export class Copilot {
       }
       const best = all[0];
       const vn = this.spoken(best.id);
-      const label = `${cap(an)} ↔ ${vn}`;
+      const label = `${cap(an)} to ${vn}`;
       // The question is about one spot, so frame a 4 cm box around the gap,
       // not the whole tumour: the finding should fill the screen.
       const mid: Vec3 = [(best.a[0] + best.b[0]) / 2, (best.a[1] + best.b[1]) / 2, (best.a[2] + best.b[2]) / 2];
@@ -247,7 +247,7 @@ export class Copilot {
         set('viewSection', true);
       }
       this.deps.showCard({
-        kicker: 'Copilot · closest vessel',
+        kicker: 'Closest vessel',
         title: label,
         rows: all.slice(0, 4).map((c, i) => ({
           label: `${i === 0 ? 'Closest: ' : ''}${cap(this.spoken(c.id))}`,
@@ -334,13 +334,13 @@ export class Copilot {
     const cm = cur.metrics;
     const margin = (m: typeof bm) => (m.tumorIncomplete ? 'tumour kept' : `${m.marginMm.toFixed(1)} mm`);
     this.deps.showCard({
-      kicker: 'Copilot · compare plans',
-      title: 'Original → current',
+      kicker: 'Plan comparison',
+      title: 'Original / current',
       rows: [
-        { label: 'Tumour margin', value: `${margin(bm)} → ${margin(cm)}`, ref: c.marginComparable ? fmt(c.marginMm, ' mm') : 'not comparable' },
-        { label: 'Liver remnant', value: `${bm.remnantPct.toFixed(1)} → ${cm.remnantPct.toFixed(1)} %`, ref: `${fmt(c.remnantPts, ' points')}` },
-        { label: 'Resected volume', value: `${Math.round(bm.resectedMl)} → ${Math.round(cm.resectedMl)} mL`, ref: fmt(c.resectedMl, ' mL', 0) },
-        { label: 'Vessel components crossed', value: `${bm.vesselsCrossed} → ${cm.vesselsCrossed}`, ref: fmt(c.vessels, '', 0) },
+        { label: 'Tumour margin', value: `${margin(bm)} / ${margin(cm)}`, ref: c.marginComparable ? fmt(c.marginMm, ' mm') : 'not comparable' },
+        { label: 'Liver remnant', value: `${bm.remnantPct.toFixed(1)} / ${cm.remnantPct.toFixed(1)} %`, ref: `${fmt(c.remnantPts, ' points')}` },
+        { label: 'Resected volume', value: `${Math.round(bm.resectedMl)} / ${Math.round(cm.resectedMl)} mL`, ref: fmt(c.resectedMl, ' mL', 0) },
+        { label: 'Vessel components crossed', value: `${bm.vesselsCrossed} / ${cm.vesselsCrossed}`, ref: fmt(c.vessels, '', 0) },
         { label: 'Plane change', value: `${c.angleDeg.toFixed(1)}°`, ref: `${fmt(c.shiftMm, ' mm')} from the ${g?.tumorCentroid() ? 'tumour' : 'organ'} centre` },
       ],
       notes: ['Dashed outline: the original plane. Geometric differences only, not a judgement of which plan is safer.'],
