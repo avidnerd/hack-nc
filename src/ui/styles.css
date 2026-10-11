@@ -629,7 +629,9 @@ body {
   height: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 200ms var(--ease);
+  /* Tracking updates at camera rate (~30 Hz); a linear glide over one camera
+     frame turns the steps into continuous motion at display rate. */
+  transition: opacity 200ms var(--ease), transform 33ms linear;
 }
 
 .hand-cursor.show { opacity: 1; }

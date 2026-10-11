@@ -123,7 +123,7 @@ hands.onFrame = (obs, t) => handControl.update(gestures.update(obs, t), t);
 const optimizer = new OptimizerClient();
 const speech = new Speech();
 const stt = new SpeechInput({
-  onCommand: (cmd, heard) => void onVoice(cmd, heard),
+  onCommand: (cmd, heard, last) => onVoice(cmd, heard, last),
   onListening: (v) => set('listening', v),
   onUnavailable: (reason) => {
     set('listening', false);
@@ -272,13 +272,26 @@ function installTopActions(): void {
  * A de-waked utterance: regex grammar first, the LLM only if that misses.
  * The transcript stays on screen so judges can see what was heard.
  */
-async function onVoice(cmd: string, heard: string): Promise<void> {
+/**
+ * Returns false only when `last` is false and the grammar did not match:
+ * the recogniser then waits for the rest of the sentence before this runs
+ * again (and falls back to the LLM).
+ */
+function onVoice(cmd: string, heard: string, last: boolean): boolean {
   state.transcriptAt = performance.now();
   set('transcript', heard);
-  if (!cmd) return; // bare wake word: the recogniser is armed for the next phrase
-  const intent = parseIntent(cmd) ?? (await intentFromLlm(cmd));
-  if (intent) dispatchIntent(intent, parseIntent(cmd) ? 'voice' : 'llm');
-  else say("Didn't catch that.");
+  if (!cmd) return true; // bare wake word: the recogniser is armed for the next phrase
+  const intent = parseIntent(cmd);
+  if (intent) {
+    dispatchIntent(intent, 'voice');
+    return true;
+  }
+  if (!last) return false;
+  void intentFromLlm(cmd).then((llm) => {
+    if (llm) dispatchIntent(llm, 'llm');
+    else say("Didn't catch that.");
+  });
+  return true;
 }
 
 /** The temporal gesture network. Optional: the rules work alone without it. */
@@ -964,6 +977,15 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       break;
 
     case 'optimize':
+      // Limits spoken with the request ("within a 30 mm margin") are the
+      // thresholds from now on, exactly as if set on their own.
+      if (intent.marginMm !== undefined || intent.remnantPct !== undefined) {
+        patch('thresholds', {
+          ...(intent.marginMm !== undefined ? { marginMin: intent.marginMm } : {}),
+          ...(intent.remnantPct !== undefined ? { remnantMin: intent.remnantPct } : {}),
+        });
+        hud.syncNumbers();
+      }
       // The aorta case optimizes the stent seat; the liver case, the cut.
       if (state.data?.meta.kind === 'aorta') {
         if (state.stent) stents.optimize();

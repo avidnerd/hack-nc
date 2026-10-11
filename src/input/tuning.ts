@@ -29,6 +29,21 @@ export const FINGERS: readonly [number, number][] = [
 ];
 
 export const TUNING = {
+  /**
+   * MediaPipe confidences. Tracking sits below detection so a hand already
+   * being followed survives gloves and motion blur instead of dropping back
+   * to the slower full-frame palm search.
+   */
+  detection: { detect: 0.5, presence: 0.4, tracking: 0.3 },
+  /** If camera frame callbacks stop for this long, detection runs from the render loop. */
+  detectStallMs: 120,
+  /** A hand missing for up to this long keeps its last reading (bridges detector dropouts). */
+  coastMs: 120,
+  /** How long a hand's last position is remembered for keeping left/right identities. */
+  handMemoryMs: 400,
+  /** A lone hand within this distance (image heights) of the other hand's last spot keeps that hand's label. */
+  sideSwapMaxDist: 0.25,
+
   /** A finger counts as extended when tip-to-wrist exceeds this × MCP-to-wrist. */
   extendRatio: 1.6,
 
@@ -61,13 +76,28 @@ export const TUNING = {
   /** Depth proxy is noisy, so it gets the heaviest smoothing of all. */
   depthFilter: { minCutoff: 0.5, beta: 0.004, dCutoff: 1.0 },
 
-  /** One screen width of palm travel equals this much rotation. */
+  /** One screen width of palm travel equals this much rotation (at normal speed). */
   rotationPerScreen: Math.PI,
   /**
-   * Velocity-driven rotation: motion below this (normalised units/frame) is
-   * treated as tremor and ignored, so a held hand does not drift the volume.
+   * Velocity-driven rotation: this much motion (normalised units/frame) is
+   * subtracted from every move as tremor, so a held hand does not drift the
+   * volume. Soft, not a cut-off: motion just above it turns the body a
+   * little rather than jumping in.
    */
   rotationDeadzone: 0.0016,
+  /** Weight of the newest frame in the smoothed rotation velocity (0..1). */
+  rotationSmoothing: 0.7,
+  /**
+   * Speed-dependent gain: slow moves turn at `rotationSlowGain` x for fine
+   * positioning, rising to `rotationFastGain` x at `rotationFastSpeed`
+   * (units/frame) so a quick sweep turns the body round without leaving the
+   * camera's view.
+   */
+  rotationSlowGain: 0.6,
+  rotationFastGain: 1.6,
+  rotationFastSpeed: 0.03,
+  /** A released grab keeps spinning only if it was moving faster than this (rad/frame). */
+  flingMin: 0.012,
   /** Per-frame decay applied to rotation velocity when the hand stops. */
   rotationDamping: 0.86,
 
@@ -75,6 +105,8 @@ export const TUNING = {
   zoomGain: 1.0,
   zoomMin: 0.9,
   zoomMax: 4.5,
+  /** Share of the remaining zoom distance covered each frame (eases out jitter). */
+  zoomEase: 0.45,
 
   /** Depth proxy: offset = clamp(k * log(hs / hs at hand-open), -0.5, 0.5) * extent. */
   depthGain: 0.8,
@@ -82,6 +114,11 @@ export const TUNING = {
 
   /** Palm travel across the full camera width moves the plane this many volume extents. */
   planeSpan: 1.0,
+  /** Opening the hand eases the existing cut over to the palm's over this long, instead of snapping. */
+  cutBlendMs: 260,
+  /** Plane changes smaller than this (degrees / mm) are not applied: a still hand gives a still cut. */
+  cutHoldDeg: 0.25,
+  cutHoldMm: 0.3,
 
   /** Screen-space radius (px) within which a pinch grabs the stent. */
   stentGrabPx: 90,

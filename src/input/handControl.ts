@@ -53,7 +53,12 @@ export class HandController {
   private pointF = new OneEuroVec(3, TUNING.landmarkFilter);
   private depthF = new OneEuro(TUNING.depthFilter);
   private hsEntry = 0;
+  /** The cut as it was when the hand opened, eased out over `cutBlendMs`. */
+  private blendFrom: { n: Vec3; d: number; t: number } | null = null;
 
+  /** Update counter, so a grab that skipped a frame re-anchors instead of jumping. */
+  private frameNo = 0;
+  private grabFrame = -2;
   private prevUv: [number, number] | null = null;
   private rotVel = { yaw: 0, pitch: 0 };
   private dragStent = false;
@@ -62,6 +67,7 @@ export class HandController {
   constructor(private readonly hooks: HandHooks) {}
 
   update(g: GestureFrame, tMs: number): void {
+    this.frameNo++;
     const entering = g.pose !== this.pose;
     if (entering) this.leave(this.pose);
     this.pose = g.pose;
@@ -102,9 +108,11 @@ export class HandController {
 
     // A released grab keeps turning briefly and settles, like a real object,
     // but only while the hand is idle: a new gesture stops it dead, so the
-    // body never drifts under a cut.
+    // body never drifts under a cut. It starts the moment the fingers part,
+    // not after the pinch has dwelled out.
     if (g.pose !== 'IDLE' && g.pose !== 'LOST' && g.pose !== 'PINCH') this.rotVel = { yaw: 0, pitch: 0 };
-    if (g.pose !== 'PINCH' && (this.rotVel.yaw !== 0 || this.rotVel.pitch !== 0)) {
+    const grabbing = this.grabFrame === this.frameNo;
+    if (!grabbing && (this.rotVel.yaw !== 0 || this.rotVel.pitch !== 0)) {
       this.applyRotation();
       this.rotVel.yaw *= TUNING.rotationDamping;
       this.rotVel.pitch *= TUNING.rotationDamping;
@@ -119,8 +127,11 @@ export class HandController {
       this.normalF.reset();
       this.pointF.reset();
       this.depthF.reset();
+      this.blendFrom = null;
     }
     if (pose === 'PINCH') {
+      // A slow release just stops; only a real flick keeps spinning.
+      if (Math.hypot(this.rotVel.yaw, this.rotVel.pitch) < TUNING.flingMin) this.rotVel = { yaw: 0, pitch: 0 };
       this.prevUv = null;
       this.dragStent = false;
       this.zoom = null;
@@ -146,7 +157,7 @@ export class HandController {
     if (nv[2] < 0) nv = scale(nv, -1);
     const nf = this.normalF.filter(scale(nv, RAD), tMs);
     const nView = normalize([nf[0], nf[1], nf[2]]);
-    const n = normalize(add(add(scale(right, nView[0]), scale(up, nView[1])), scale(forward, -nView[2])));
+    let n = normalize(add(add(scale(right, nView[0]), scale(up, nView[1])), scale(forward, -nView[2])));
 
     // Position: the point under the hand, at the organ's depth...
     const pivot = this.hooks.pivot() ?? f.centerMm;
@@ -163,33 +174,76 @@ export class HandController {
       clamp(TUNING.depthGain * Math.log(hand.f.hs / this.hsEntry), -TUNING.depthClamp, TUNING.depthClamp) * f.maxExtent;
     const depth = this.depthF.filter(depthRaw, tMs);
     const pf = this.pointF.filter(add(under, scale(forward, depth)), tMs);
-    const p: Vec3 = [pf[0], pf[1], pf[2]];
+    let p: Vec3 = [pf[0], pf[1], pf[2]];
 
-    patch('plane', { on: true, n, d: dot(n, p) });
+    // Opening the hand eases the cut already on screen over to the palm
+    // rather than snapping it there.
+    const cur = state.plane;
+    if (entering) this.blendFrom = cur.on ? { n: cur.n, d: cur.d, t: tMs } : null;
+    const from = this.blendFrom;
+    if (from) {
+      const w = clamp((tMs - from.t) / TUNING.cutBlendMs, 0, 1);
+      // A cut facing the other way cannot be eased across: it would sweep
+      // edge-on through the organ.
+      if (w >= 1 || dot(from.n, n) < 0) {
+        this.blendFrom = null;
+      } else {
+        const e = w * w * (3 - 2 * w);
+        const p0 = sub(p, scale(from.n, dot(from.n, p) - from.d));
+        n = normalize(add(scale(from.n, 1 - e), scale(n, e)));
+        p = add(scale(p0, 1 - e), scale(p, e));
+      }
+    }
+
+    // A still hand gives a still cut: sub-threshold changes are not applied,
+    // so the cut face and the numbers do not shimmer.
+    const d = dot(n, p);
+    if (cur.on && !this.blendFrom) {
+      const deg = Math.acos(clamp(dot(cur.n, n), -1, 1)) * RAD;
+      if (deg < TUNING.cutHoldDeg && Math.abs(d - cur.d) < TUNING.cutHoldMm) return;
+    }
+    patch('plane', { on: true, n, d });
   }
 
   /* ------------------------------------------------------- grab and rotate */
 
   private grab(hand: TrackedHand, entering: boolean): void {
-    const uv = hand.obs.pinchUv;
-    const px = uv[0] * window.innerWidth;
-    const py = uv[1] * window.innerHeight;
-    if (entering || !this.prevUv) {
+    const tip = hand.obs.pinchUv;
+    const px = tip[0] * window.innerWidth;
+    const py = tip[1] * window.innerHeight;
+    // Rotation follows the palm, not the pinch point: the fingertips shift as
+    // the pinch closes and opens, which used to kick the body on grab and
+    // release.
+    const uv = hand.obs.uv;
+    if (entering || !this.prevUv) this.dragStent = this.hooks.stentHit(px, py);
+    if (this.dragStent) {
       this.prevUv = [uv[0], uv[1]];
-      this.dragStent = this.hooks.stentHit(px, py);
+      if (!state.plane.locked) this.hooks.stentDrag(px, py);
       return;
     }
-    if (this.dragStent) {
-      if (!state.plane.locked) this.hooks.stentDrag(px, py);
+    const resumed = this.grabFrame === this.frameNo - 1;
+    this.grabFrame = this.frameNo;
+    if (entering || !this.prevUv || !resumed) {
+      // Fresh grab, or the hand flickered out of the pinch for a frame:
+      // re-anchor rather than jump by the distance moved meanwhile.
+      this.prevUv = [uv[0], uv[1]];
+      this.rotVel = { yaw: 0, pitch: 0 };
       return;
     }
     const du = uv[0] - this.prevUv[0];
     const dv = uv[1] - this.prevUv[1];
     this.prevUv = [uv[0], uv[1]];
-    const dz = TUNING.rotationDeadzone;
+
+    // Soft tremor dead zone, then a speed-dependent gain: slow moves for
+    // fine positioning, quick sweeps to turn the body round.
+    const speed = Math.hypot(du, dv);
+    const soft = speed > TUNING.rotationDeadzone ? (speed - TUNING.rotationDeadzone) / speed : 0;
+    const fast = Math.min(1, speed / TUNING.rotationFastSpeed);
+    const k = soft * (TUNING.rotationSlowGain + (TUNING.rotationFastGain - TUNING.rotationSlowGain) * fast) * TUNING.rotationPerScreen;
     // Same direction as a mouse drag: the body turns the way the hand moves.
-    this.rotVel.yaw = Math.abs(du) > dz ? -du * TUNING.rotationPerScreen : 0;
-    this.rotVel.pitch = Math.abs(dv) > dz ? dv * TUNING.rotationPerScreen * 0.75 : 0;
+    const a = TUNING.rotationSmoothing;
+    this.rotVel.yaw = a * (-du * k) + (1 - a) * this.rotVel.yaw;
+    this.rotVel.pitch = a * (dv * k * 0.75) + (1 - a) * this.rotVel.pitch;
     this.applyRotation();
   }
 
@@ -211,8 +265,9 @@ export class HandController {
     }
     // Hands apart = closer, like stretching a photo.
     const floor = Math.min(TUNING.zoomMin, this.zoom.dist0); // copilot may have framed closer
-    const dist = clamp(this.zoom.dist0 * Math.pow(this.zoom.gap0 / Math.max(gap, 0.02), TUNING.zoomGain), floor, TUNING.zoomMax);
-    patch('camera', { dist });
+    const target = clamp(this.zoom.dist0 * Math.pow(this.zoom.gap0 / Math.max(gap, 0.02), TUNING.zoomGain), floor, TUNING.zoomMax);
+    const c = state.camera.dist;
+    patch('camera', { dist: c + (target - c) * TUNING.zoomEase });
   }
 
   /* --------------------------------------------------------------- caliper */

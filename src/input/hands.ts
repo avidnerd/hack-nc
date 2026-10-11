@@ -57,6 +57,14 @@ export class HandInput {
     right: new OneEuroVec(63, TUNING.landmarkFilter),
   };
   private lastSeen: Record<Side, number> = { left: -1e9, right: -1e9 };
+  /** Last emitted observation per hand, re-emitted across a brief dropout. */
+  private lastObs: Record<Side, HandObs | null> = { left: null, right: null };
+  /** Last wrist position per hand (mirrored image units), to keep identities. */
+  private lastWrist: Record<Side, [number, number] | null> = { left: null, right: null };
+  /** When detection last ran; the rAF path takes over if frame callbacks stall. */
+  private lastDetect = -1e9;
+  /** Last timestamp given to MediaPipe, which rejects any that do not increase. */
+  private lastTs = 0;
 
   private recording: RawFrame[] | null = null;
   /** Set while teaching mode prompts a pose; stamped onto recorded frames. */
@@ -95,9 +103,13 @@ export class HandInput {
    * either fails, so the caller can fall back to mouse mode.
    */
   async start(): Promise<boolean> {
+    // The model downloads and compiles while the camera permission prompt is
+    // up, instead of after it: hands are live a second or two sooner.
+    const t0 = performance.now();
+    const model = this.loadModel();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: 'user' },
         audio: false,
       });
       this.video.srcObject = stream;
@@ -109,26 +121,58 @@ export class HandInput {
       return false;
     }
 
+    const landmarker = await model;
+    if (!landmarker) return false;
+    // The first GPU inference compiles shaders (a few hundred ms). Pay for it
+    // here, not on the first frame a hand is up.
     try {
-      const t0 = performance.now();
+      landmarker.detectForVideo(this.video, this.stamp());
+    } catch (err) {
+      console.warn('[hands] warm-up failed', err);
+    }
+    this.landmarker = landmarker;
+    console.info(`[hands] HandLandmarker ready in ${(performance.now() - t0).toFixed(0)} ms`);
+    this.followFrames();
+    return true;
+  }
+
+  private async loadModel(): Promise<HandLandmarker | null> {
+    try {
       const vision = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe/wasm`);
-      this.landmarker = await HandLandmarker.createFromOptions(vision, {
+      return await HandLandmarker.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath: `${import.meta.env.BASE_URL}models/hand_landmarker.task`,
           delegate: 'GPU',
         },
         runningMode: 'VIDEO',
         numHands: 2,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        minHandDetectionConfidence: TUNING.detection.detect,
+        minHandPresenceConfidence: TUNING.detection.presence,
+        minTrackingConfidence: TUNING.detection.tracking,
       });
-      console.info(`[hands] HandLandmarker ready in ${(performance.now() - t0).toFixed(0)} ms`);
-      return true;
     } catch (err) {
       console.warn('[hands] model failed to load', err);
-      return false;
+      return null;
     }
+  }
+
+  /**
+   * Detect as each camera frame arrives rather than on the next animation
+   * frame: up to one display frame less latency, and no camera frame is
+   * skipped or waited on because the two clocks drift.
+   */
+  private followFrames(): void {
+    const v = this.video;
+    if (typeof v.requestVideoFrameCallback !== 'function') return;
+    const onVideoFrame = (): void => {
+      try {
+        if (!this.playback) this.detect();
+      } catch (err) {
+        console.error('[hands] detect failed', err);
+      }
+      v.requestVideoFrameCallback(onVideoFrame);
+    };
+    v.requestVideoFrameCallback(onVideoFrame);
   }
 
   /** Call once per animation frame. */
@@ -137,13 +181,30 @@ export class HandInput {
       this.tickPlayback(now);
       return;
     }
+    // Frame callbacks are the normal path; this covers browsers without them
+    // and any stall (a hidden video can stop delivering them).
+    if (now - this.lastDetect > TUNING.detectStallMs) this.detect();
+  }
+
+  /**
+   * One clock for every detection, whichever path calls it: rAF's frame
+   * timestamp can be earlier than a frame callback's performance.now() in the
+   * same frame, and MediaPipe fails the whole graph on a step backwards.
+   */
+  private stamp(): number {
+    this.lastTs = Math.max(performance.now(), this.lastTs + 0.001);
+    return this.lastTs;
+  }
+
+  private detect(): void {
     if (!this.landmarker || this.video.readyState < 2) return;
     if (this.video.currentTime === this.lastVideoTime) return;
     this.lastVideoTime = this.video.currentTime;
 
-    const t0 = performance.now();
+    const now = this.stamp();
+    this.lastDetect = now;
     const res = this.landmarker.detectForVideo(this.video, now);
-    this.detectMs = this.detectMs * 0.9 + (performance.now() - t0) * 0.1;
+    this.detectMs = this.detectMs * 0.9 + (performance.now() - now) * 0.1;
 
     const hands: RawFrame['hands'] = [];
     for (let h = 0; h < res.landmarks.length; h++) {
@@ -162,15 +223,62 @@ export class HandInput {
     this.ingest(hands, now);
   }
 
-  /** Smooth raw landmarks, convert to image units, and emit. */
-  private ingest(raw: RawFrame['hands'], now: number): void {
+  /**
+   * MediaPipe's handedness label is a per-frame guess and flips now and then,
+   * most often with gloves or a hand seen edge-on. A flip would reset that
+   * hand's smoothing and pose, so identity follows position instead: a lone
+   * hand nearer where the other label's hand just was takes that label, and
+   * two tracked hands keep whichever pairing moves them least.
+   */
+  private stabiliseSides(raw: RawFrame['hands'], now: number): RawFrame['hands'] {
     const a = this.aspect;
+    const wrist = (h: RawFrame['hands'][number]): [number, number] => [(1 - h.lm[0]) * a, h.lm[1]];
+    const recent = (s: Side): boolean => now - this.lastSeen[s] < TUNING.handMemoryMs;
+    const gap = (p: [number, number], s: Side): number => {
+      const q = this.lastWrist[s];
+      return q && recent(s) ? Math.hypot(p[0] - q[0], p[1] - q[1]) : Infinity;
+    };
+
+    if (raw.length === 1) {
+      const h = raw[0];
+      const other: Side = h.side === 'left' ? 'right' : 'left';
+      const w = wrist(h);
+      const g = gap(w, other);
+      return g < TUNING.sideSwapMaxDist && g < gap(w, h.side) ? [{ ...h, side: other }] : raw;
+    }
+    if (raw.length === 2) {
+      const [h0, h1] = raw;
+      const w0 = wrist(h0);
+      const w1 = wrist(h1);
+      let leftFirst: boolean;
+      if (recent('left') && recent('right')) {
+        leftFirst = gap(w0, 'left') + gap(w1, 'right') <= gap(w0, 'right') + gap(w1, 'left');
+      } else if (h0.side === h1.side) {
+        // Both labelled the same with nothing to go on: in the mirrored view
+        // the user's left hand is the one on the left.
+        leftFirst = w0[0] < w1[0];
+      } else {
+        return raw;
+      }
+      return [
+        { ...h0, side: leftFirst ? 'left' : 'right' },
+        { ...h1, side: leftFirst ? 'right' : 'left' },
+      ];
+    }
+    return raw;
+  }
+
+  /** Smooth raw landmarks, convert to image units, and emit. */
+  private ingest(detected: RawFrame['hands'], now: number): void {
+    const a = this.aspect;
+    const raw = this.stabiliseSides(detected, now);
     const out: HandObs[] = [];
     for (const h of raw) {
       // A hand that vanished and came back must not be smoothed toward where
       // it was a second ago.
       if (now - this.lastSeen[h.side] > TUNING.lostMs) this.filters[h.side].reset();
       this.lastSeen[h.side] = now;
+      this.lastWrist[h.side] = [(1 - h.lm[0]) * a, h.lm[1]];
 
       const px: number[] = new Array(63);
       for (let i = 0; i < 21; i++) {
@@ -186,13 +294,24 @@ export class HandInput {
       const c = palmCenter(lm);
       const th = lm[LM.THUMB_TIP];
       const ix = lm[LM.INDEX_TIP];
-      out.push({
+      const obs: HandObs = {
         side: h.side,
         lm,
         uv: toUv(c),
         indexUv: toUv(ix),
         pinchUv: toUv([(th[0] + ix[0]) / 2, (th[1] + ix[1]) / 2, 0]),
-      });
+      };
+      this.lastObs[h.side] = obs;
+      out.push(obs);
+    }
+    // The detector drops a hand for a frame or two in fast moves and motion
+    // blur. Holding its last reading over the gap keeps the gesture (and the
+    // cut's depth reference) alive instead of re-dwelling from scratch.
+    for (const s of ['left', 'right'] as Side[]) {
+      const last = this.lastObs[s];
+      if (!last || out.some((o) => o.side === s)) continue;
+      if (now - this.lastSeen[s] <= TUNING.coastMs) out.push(last);
+      else this.lastObs[s] = null;
     }
     this.drawPreview(out);
     this.onFrame(out, now);
@@ -265,6 +384,8 @@ export class HandInput {
     this.aspect = rec.aspect || this.aspect;
     this.filters.left.reset();
     this.filters.right.reset();
+    this.lastObs = { left: null, right: null };
+    this.lastWrist = { left: null, right: null };
     this.playback = { rec, start: performance.now(), i: 0 };
   }
 
