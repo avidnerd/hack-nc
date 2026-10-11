@@ -22,11 +22,11 @@ interface Step {
   done: () => boolean;
 }
 
-const LEGEND: { pose: Pose; icon: string; label: string }[] = [
-  { pose: 'OPEN', icon: '✋', label: 'Cut' },
-  { pose: 'PINCH', icon: '🤏', label: 'Rotate · 2× zoom' },
-  { pose: 'FIST', icon: '✊', label: 'Lock' },
-  { pose: 'CALIPER', icon: '☝☝', label: 'Measure' },
+const LEGEND: { pose: Pose; gesture: string; action: string }[] = [
+  { pose: 'OPEN', gesture: 'Open hand', action: 'cut' },
+  { pose: 'PINCH', gesture: 'Pinch', action: 'rotate (both hands: zoom)' },
+  { pose: 'FIST', gesture: 'Fist', action: 'lock' },
+  { pose: 'CALIPER', gesture: 'Two fingers', action: 'measure' },
 ];
 
 const CURSOR_LABEL: Partial<Record<Pose, string>> = {
@@ -43,7 +43,8 @@ export class Guide {
   private rail = el('nav', 'rail');
   private onboard = el('div', 'onboard');
   private legendItems = new Map<Pose, HTMLElement>();
-  private flags = { optimized: false, explained: false, dragged: false, measured: false, evidence: false };
+  private yaw0 = state.camera.yaw;
+  private flags = { optimized: false, explained: false, dragged: false, measured: false, evidence: false, windowed: false, turned: false };
   private lastRail = '';
 
   constructor() {
@@ -63,6 +64,17 @@ export class Guide {
     on('mode', (m) => {
       if (m === 'patient') this.flags.explained = true;
       document.body.classList.toggle('patient-mode', m === 'patient');
+    });
+    // Loading a case sets its default window; only a change away from it counts.
+    on('preset', (p) => {
+      if (p !== state.data?.meta.defaultPreset) this.flags.windowed = true;
+    });
+    on('caliper', (c) => {
+      if (c.a && c.b) this.flags.measured = true;
+    });
+    // "Look around" is done after a real turn, not the camera reset on load.
+    on('camera', (c) => {
+      if (Math.abs(c.yaw - this.yaw0) > 0.3) this.flags.turned = true;
     });
     on('stent', (s) => {
       if (s && !s.seals) this.flags.dragged = true;
@@ -90,12 +102,13 @@ export class Guide {
 
     this.rail.innerHTML = '';
     const head = el('div', 'rail-head');
-    head.textContent = state.data?.meta.kind === 'aorta' ? 'Stent plan' : 'Liver resection plan';
+    const kind = state.data?.meta.kind;
+    head.textContent = kind === 'aorta' ? 'Stent plan' : kind === 'scan' ? 'Your scan' : 'Liver resection plan';
     this.rail.append(head);
     steps.forEach((s, i) => {
       const row = el('div', `rail-step${s.done() ? ' done' : ''}${i === next ? ' next' : ''}`);
       const dot = el('span', 'rail-dot');
-      dot.textContent = s.done() ? '✓' : String(i + 1);
+      dot.textContent = String(i + 1);
       const body = el('div', 'rail-body');
       const t = el('div', 'rail-title');
       t.textContent = s.title;
@@ -122,6 +135,14 @@ export class Guide {
 
   private steps(): Step[] {
     const s = state;
+    if (s.data?.meta.kind === 'scan') {
+      return [
+        { id: 'turn', title: 'Look around', hint: 'Pinch and drag to turn the scan', done: () => this.flags.turned },
+        { id: 'cut', title: 'Slice through it', hint: 'Open your hand: the cut follows your palm', say: 'make an axial cut', done: () => s.plane.on },
+        { id: 'window', title: 'Change the window', hint: 'Bone, lung or soft tissue', say: 'bone window', done: () => this.flags.windowed },
+        { id: 'measure', title: 'Measure something', hint: 'Two index fingers, or click two points', done: () => this.flags.measured },
+      ];
+    }
     if (s.data?.meta.kind === 'aorta') {
       return [
         { id: 'measure', title: 'Measure the aorta', hint: 'Diameter against the aneurysm threshold', say: 'measure the aorta', done: () => this.flags.measured },
@@ -143,7 +164,8 @@ export class Guide {
   }
 
   private resetFlags(): void {
-    this.flags = { optimized: false, explained: false, dragged: false, measured: false, evidence: false };
+    this.yaw0 = state.camera.yaw;
+    this.flags = { optimized: false, explained: false, dragged: false, measured: false, evidence: false, windowed: false, turned: false };
     this.lastRail = '';
   }
 
@@ -161,11 +183,11 @@ export class Guide {
   private buildLegend(): void {
     for (const g of LEGEND) {
       const item = el('div', 'legend-item');
-      const icon = el('span', 'legend-icon');
-      icon.textContent = g.icon;
+      const gesture = el('span', 'legend-gesture');
+      gesture.textContent = g.gesture;
       const label = el('span', 'legend-label');
-      label.textContent = g.label;
-      item.append(icon, label);
+      label.textContent = g.action;
+      item.append(gesture, label);
       this.legend.append(item);
       this.legendItems.set(g.pose, item);
     }
@@ -175,12 +197,12 @@ export class Guide {
     this.onboard.innerHTML = `
       <div class="onboard-card">
         <div class="onboard-title">Raise a hand to begin</div>
-        <div class="onboard-sub">Scrub+ watches your hands through the webcam and listens for “Scrub, …”.<br>Nothing to touch: it is built to stay sterile.</div>
+        <div class="onboard-sub">The webcam follows your hands and the microphone listens for “Scrub”, so you never have to touch the computer.</div>
         <div class="onboard-grid">
-          <div><span>✋</span>Open hand<br><em>cut</em></div>
-          <div><span>🤏</span>Pinch &amp; drag<br><em>rotate</em></div>
-          <div><span>✊</span>Fist<br><em>lock</em></div>
-          <div><span>☝☝</span>Two fingers<br><em>measure</em></div>
+          <div>Open hand<br><em>cut</em></div>
+          <div>Pinch and drag<br><em>rotate</em></div>
+          <div>Fist<br><em>lock</em></div>
+          <div>Two fingers<br><em>measure</em></div>
         </div>
         <div class="onboard-foot">No camera? Drag with the mouse. Press <kbd>?</kbd> for every control.</div>
       </div>`;

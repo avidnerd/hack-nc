@@ -107,7 +107,7 @@ export class StentMesh {
       this.label.hidden = false;
       this.label.classList.toggle('bad', !st.seals);
       this.label.textContent = st.seals
-        ? `Neck ${Math.round(st.neckMm)} mm · ø${st.diameterMm.toFixed(0)} mm · seals`
+        ? `Neck ${Math.round(st.neckMm)} mm, ${st.diameterMm.toFixed(0)} mm device, seals`
         : (st.failReason ?? "Won't seal");
       this.label.style.transform = `translate(${s.x + 18}px, ${s.y}px) translate(0, -50%)`;
     } else {

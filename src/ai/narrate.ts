@@ -63,7 +63,7 @@ export function fractionWords(pct: number): string {
 }
 
 export interface PatientFacts {
-  caseKind: 'liver' | 'aorta';
+  caseKind: 'liver' | 'aorta' | 'scan';
   metrics: PlanMetrics | null;
   stent: StentState | null;
   /** Organ name, lowercase. */
@@ -162,7 +162,7 @@ function cap(s: string): string {
 
 export interface PlanFacts {
   caseName: string;
-  caseKind: 'liver' | 'aorta';
+  caseKind: 'liver' | 'aorta' | 'scan';
   structures: string[];
   plane: { n: [number, number, number]; d: number; on: boolean };
   metrics: PlanMetrics | null;
@@ -194,7 +194,7 @@ export function planMarkdown(f: PlanFacts): string {
   L.push(`- **Case:** ${f.caseName}`);
   L.push(`- **Generated:** ${f.when.toISOString()}`);
   L.push(`- **Structures:** ${f.structures.join(', ')}`);
-  L.push(`- **Organ volume:** ${fx(f.organMl, 0)} mL${f.tumorMl > 0 ? ` · tumour ${fx(f.tumorMl)} mL` : ''}`);
+  L.push(`- **Organ volume:** ${fx(f.organMl, 0)} mL${f.tumorMl > 0 ? `, tumour ${fx(f.tumorMl)} mL` : ''}`);
   L.push('');
   if (f.plane.on && f.metrics) {
     const m = f.metrics;

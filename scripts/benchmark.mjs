@@ -20,7 +20,7 @@ import { writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
 const repeats = Number(process.argv[2] ?? 5);
-const URL = 'http://localhost:5173/?hands=off&voice=off';
+const URL = 'http://localhost:5173/?hands=off&voice=off&tutorial=0';
 
 const browser = await chromium.launch({ headless: false, args: ['--ignore-gpu-blocklist'] });
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();

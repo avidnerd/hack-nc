@@ -8,6 +8,9 @@ the bottom of the screen for three seconds, so the audience sees recognition wor
 
 ## 0. Before you start (off stage)
 
+- First visit: the practice carousel opens on a simple object and checks each gesture
+  on your hands. Do it once off stage (or press `H` to rerun it). On stage, open
+  `/?case=liver` (or `?tutorial=0`) to go straight to the case.
 - Allow camera and microphone when Chrome asks.
 - Hold one open hand up for half a second: that calibrates the depth baseline.
 - Press `V` if you want the webcam preview hidden; leave it on for judges.

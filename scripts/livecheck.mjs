@@ -29,7 +29,7 @@ page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 
 const t0 = Date.now();
-await page.goto('http://localhost:5173/?voice=off', { waitUntil: 'load' });
+await page.goto('http://localhost:5173/?voice=off&tutorial=0', { waitUntil: 'load' });
 await page.waitForFunction(() => window.scrub?.state?.phase === 'ready', { timeout: 60000 });
 const bootMs = Date.now() - t0;
 await page.waitForFunction(() => window.scrub.state.inputMode === 'hands', { timeout: 30000 }).catch(() => {});

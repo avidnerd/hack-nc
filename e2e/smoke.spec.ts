@@ -13,7 +13,7 @@ test('demo stream drives the plane and the numbers', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.goto('/?hands=off&voice=off');
+  await page.goto('/?hands=off&voice=off&tutorial=0');
   await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
   // Software WebGL: keep the frame rate up so playback is not decimated.
   await page.evaluate(() => (window.scrub!.renderer.stepsOverride = 16));
@@ -72,7 +72,7 @@ test('keyboard fallback runs moments 2 to 4', async ({ page }) => {
 });
 
 test('copilot: ask for anatomy, get the view and the verified measurement', async ({ page }) => {
-  await page.goto('/?hands=off&voice=off');
+  await page.goto('/?hands=off&voice=off&tutorial=0');
   await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
   await page.evaluate(() => (window.scrub!.renderer.stepsOverride = 16));
   // The grammar is imported in the page by its dev-server URL (a variable, so
@@ -120,7 +120,7 @@ test('copilot: ask for anatomy, get the view and the verified measurement', asyn
   for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown');
   await say('compare this cut to the original plan');
   await page.waitForFunction(() => window.scrub!.state.ghostPlane !== null);
-  await expect(page.locator('.info-card.show')).toContainText('Original → current');
+  await expect(page.locator('.info-card.show')).toContainText('Original / current');
   expect(await page.evaluate(() => window.scrub!.state.response)).toMatch(/^Compared with the saved plan, the current plane /);
 
   // D: restore reproduces the saved plane exactly; go back returns.
@@ -144,4 +144,63 @@ test('copilot: ask for anatomy, get the view and the verified measurement', asyn
       return ((await import(/* @vite-ignore */ url)) as typeof import('../src/voice/intents.ts')).parseIntent('focus on the spleen');
     }),
   ).toBeNull();
+});
+
+test('first-run tutorial: each step waits for the gesture (mouse stand-ins), then picks a case', async ({ page }) => {
+  // A laptop-sized window, so the object is visible beside the card.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/?hands=off&voice=off');
+  await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
+  const card = page.locator('.tutorial .tut-card');
+  await expect(card).toContainText('Show your hand', { timeout: 15_000 });
+  expect(await page.evaluate(() => window.scrub!.state.data?.meta.id)).toBe('practice');
+
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(card).toContainText('Pinch and drag to turn');
+  // Not done until the object actually turns.
+  await page.waitForTimeout(400);
+  await expect(card).toContainText('Pinch and drag to turn');
+  await page.mouse.move(760, 400);
+  await page.mouse.down();
+  await page.mouse.move(1150, 400, { steps: 12 });
+  await page.mouse.up();
+  await expect(card).toContainText('Two pinches to zoom', { timeout: 5_000 });
+
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -300);
+  await expect(card).toContainText('Open hand to cut', { timeout: 5_000 });
+  await page.keyboard.press('x');
+  await expect(card).toContainText('Fist to lock', { timeout: 5_000 });
+  await page.keyboard.press('l');
+  await expect(card).toContainText('Two fingers to measure', { timeout: 5_000 });
+  await page.mouse.click(780, 380);
+  await page.mouse.click(860, 400);
+  await expect(card).toContainText('Voice commands', { timeout: 5_000 });
+
+  await page.getByRole('button', { name: 'Liver case' }).click();
+  await expect(page.locator('.tutorial')).toHaveCount(0);
+  await page.waitForFunction(() => window.scrub!.state.data?.meta.id === 'liver');
+});
+
+test('upload: a NIfTI CT from disk becomes a viewable case', async ({ page }) => {
+  await page.goto('/?hands=off&voice=off&tutorial=0');
+  await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
+  const { makeNifti } = await import('../tests/niftiFixture.ts');
+  const ct = makeNifti({
+    dims: [48, 48, 40],
+    spacing: [1.2, 1.2, 2],
+    value: (i, j, k) => ((i - 24) ** 2 + (j - 24) ** 2 + (k - 20) ** 2 < 15 ** 2 ? 60 : (i - 24) ** 2 + (j - 24) ** 2 < 22 ** 2 ? -50 : -1000),
+  });
+  // The Upload button (headless Chromium opens no picker from a key press).
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Upload CT' }).click();
+  await (await chooser).setFiles({ name: 'my_scan.nii', mimeType: 'application/octet-stream', buffer: Buffer.from(ct) });
+  await page.waitForFunction(() => window.scrub!.state.data?.meta.id === 'upload', null, { timeout: 15_000 });
+  const meta = await page.evaluate(() => ({ ...window.scrub!.state.data!.meta }));
+  expect(meta.kind).toBe('scan');
+  expect(meta.name).toBe('Upload: my_scan');
+  expect(await page.evaluate(() => window.scrub!.state.response)).toMatch(/^Scan loaded\. No labels/);
+  // The generic tools work on it: a spoken cut through its centre.
+  await page.evaluate(() => window.scrub!.dispatch({ kind: 'cut', orientation: 'axial', through: null, offsetMm: null }, 'voice'));
+  await page.waitForFunction(() => window.scrub!.state.plane.on);
+  expect(await page.evaluate(() => window.scrub!.state.metrics)).toBeNull();
 });

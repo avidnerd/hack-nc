@@ -40,6 +40,7 @@ Reply with ONE JSON object and nothing else. Allowed objects:
 {"kind":"comparePlan"}
 {"kind":"previousView"}
 {"kind":"cancel"}
+{"kind":"tutorial"}
 {"kind":"none"}
 Use {"kind":"none"} if the command matches nothing.`;
 
@@ -81,6 +82,7 @@ export function validate(o: Record<string, unknown>): Intent | null {
     case 'comparePlan':
     case 'previousView':
     case 'cancel':
+    case 'tutorial':
       return { kind: o.kind };
     // Confirming an overwrite is destructive: only an explicit spoken
     // "confirm" (the regex grammar) may do it, never a model's guess.

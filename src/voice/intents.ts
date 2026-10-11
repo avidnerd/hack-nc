@@ -37,7 +37,8 @@ export type Intent =
   | { kind: 'restorePlan' }
   | { kind: 'comparePlan' }
   | { kind: 'previousView' }
-  | { kind: 'cancel' };
+  | { kind: 'cancel' }
+  | { kind: 'tutorial' };
 
 /** Every intent kind, for the LLM fallback's JSON schema. */
 export const INTENT_KINDS = [
@@ -69,6 +70,7 @@ export const INTENT_KINDS = [
   'comparePlan',
   'previousView',
   'cancel',
+  'tutorial',
 ] as const;
 
 /* --------------------------------------------------------------- wake word */
@@ -198,6 +200,7 @@ export function parseIntent(text: string): Intent | null {
   if (/^(confirm|yes|yes,? (replace|overwrite)( it)?|overwrite( it)?|replace it|confirm (save|overwrite|it))$/.test(s)) {
     return { kind: 'confirm' };
   }
+  if (/\b(tutorial|practi[cs]e|teach me|how do i use|show me how)\b/.test(s)) return { kind: 'tutorial' };
   if (/\b(compare|comparison|versus|difference between)\b/.test(s)) return { kind: 'comparePlan' };
   if (/\b(previous|last) view\b|\bundo( that| the view)?\b|\b(go )?back to the (previous|last)\b/.test(s)) {
     return { kind: 'previousView' };

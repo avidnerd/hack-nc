@@ -8,7 +8,8 @@ export default defineConfig({
     open: false,
     // site/ is the separate Astro landing page; its builds lock files in
     // site/dist that crashed this watcher (EBUSY), and the app never imports it.
-    watch: { ignored: ['**/site/**'] },
+    // A regex, not a glob: the glob missed Windows backslash paths.
+    watch: { ignored: [/[\\/]site[\\/]/] },
   },
   build: { target: 'es2022', assetsInlineLimit: 0 },
   // Shaders are imported with ?raw so they stay in .glsl files.
