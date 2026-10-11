@@ -17,6 +17,7 @@ import {
   DIRECTIONS,
   fibonacciCap,
   OFFSET_MM,
+  optimizeAround,
   optimizePlane,
   score,
 } from '../src/planning/optimize.ts';
@@ -189,4 +190,24 @@ describe.skipIf(!present)('plane optimizer on the liver case', () => {
     expect(acceptable(res.after)).toBe(true);
     expect(res.after.vesselsCrossed).toBe(fewest);
   }, 180_000);
+
+  it('a bad cut is replaced by the best one anywhere around the tumour', () => {
+    // A straight coronal cut 4 mm off the tumour: the local search cannot get
+    // it to a vessel-free, on-target plan within 20 degrees; the wide one can.
+    const toward = normalize(sub(grid.tumorCentroid()!, grid.organCentroid()!));
+    const n: Vec3 = toward[1] < 0 ? [0, -1, 0] : [0, 1, 0];
+    let tmin = Infinity;
+    for (const i of grid.tumorIdx) tmin = Math.min(tmin, dot(n, grid.worldAt(i)));
+    const start = { n, d: tmin - 4 };
+    const local = optimizePlane(coarse, start, th, undefined, fine);
+    const wide = optimizeAround(coarse, start, th, fine)!;
+    const quality = (r: typeof wide) => score(r.after, r.plane.n, r.plane.d, r.plane.n, r.plane.d, th);
+    expect(local.feasible).toBe(false);
+    expect(wide.feasible).toBe(true);
+    expect(wide.after.vesselsCrossed).toBe(0);
+    expect(quality(wide)).toBeGreaterThan(quality(local));
+    // With no cut at all it finds the same kind of answer.
+    const none = optimizeAround(coarse, null, th, fine)!;
+    expect(none.feasible).toBe(true);
+  }, 60_000);
 });

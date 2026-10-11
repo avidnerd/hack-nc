@@ -79,6 +79,7 @@ Not built. In order of clinical value per the review:
 | Patient view hides the cut, skin and bone so the whole organ and tumour show; the callouts explain what is removed. | `src/render/anatomy.ts` |
 | The LLM command rescue waits 2.5 s, not 1.5 s: measured Gemini Flash Lite replies land at 1.3–1.6 s. It is async, so nothing waits on it; narration keeps 1.5 s. | `src/ai/intentFallback.ts` |
 | Spoken priorities ("spare the vessels", "keep more liver") reweight the optimizer's score per request; they are not stored as thresholds. | `src/planning/optimize.ts` |
+| When the surgeon's cut cannot be fixed within 20 degrees (or there is none, or it misses the liver), "optimize" runs a wide search: 145 directions within 75 degrees of the tumour's outward direction, each just around the margin target, ranked on quality with no pull toward the start. This departs from §6.5's "stay near the surgeon" terms on purpose: a bad start should get the optimal plan. A cut that already meets every target is still only refined locally. | `src/planning/optimize.ts` (`optimizeAround`), `src/main.ts` |
 
 ## Ship TODOs
 

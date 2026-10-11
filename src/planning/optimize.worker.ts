@@ -3,7 +3,7 @@
  * keeps rendering at full rate while the optimizer thinks.
  */
 
-import { coarseContext, optimizePlane } from './optimize.ts';
+import { coarseContext, optimizeAround, optimizePlane } from './optimize.ts';
 import { vesselCrossingsAlong } from './vessels.ts';
 import type { EngineContext } from './engine.ts';
 import type { CoarseGrid } from './volume.ts';
@@ -19,7 +19,8 @@ export type WorkerIn =
       fineBox: EngineContext['box'];
       names: [number, string][];
     }
-  | { type: 'run'; id: number; plane: Plane; thresholds: Thresholds; directions?: number };
+  /** `wide`: the best cut anywhere around the tumour (`plane` only measures how far it moved; may be null). */
+  | { type: 'run'; id: number; plane: Plane | null; thresholds: Thresholds; directions?: number; mode?: 'local' | 'wide' };
 
 let ctx: EngineContext | null = null;
 let fine: EngineContext | null = null;
@@ -39,6 +40,9 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     self.postMessage({ type: 'error', id: msg.id, message: 'no grid loaded' });
     return;
   }
-  const result = optimizePlane(ctx, msg.plane, msg.thresholds, msg.directions, fine);
+  const result =
+    msg.mode === 'wide' || !msg.plane
+      ? optimizeAround(ctx, msg.plane, msg.thresholds, fine)
+      : optimizePlane(ctx, msg.plane, msg.thresholds, msg.directions, fine);
   self.postMessage({ type: 'result', id: msg.id, result });
 };

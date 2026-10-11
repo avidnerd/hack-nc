@@ -247,12 +247,9 @@ function tumorPoints(g: EngineContext['grid']): Float32Array {
   return pts;
 }
 
-/**
- * The point of the plane nearest the organ's centre: the pivot rotations are
- * taken about, so tilting the cut does not swing it off the liver.
- */
+/** The organ's centre of mass on `ctx`'s grid, cached per context. */
 const pivotCache = new WeakMap<EngineContext, Vec3>();
-function pointOn(n: Vec3, d: number, ctx: EngineContext): Vec3 {
+function organCentre(ctx: EngineContext): Vec3 {
   let c = pivotCache.get(ctx);
   if (!c) {
     const g = ctx.grid;
@@ -269,6 +266,105 @@ function pointOn(n: Vec3, d: number, ctx: EngineContext): Vec3 {
     c = [sx / cnt, sy / cnt, sz / cnt];
     pivotCache.set(ctx, c);
   }
+  return c;
+}
+
+/**
+ * The point of the plane nearest the organ's centre: the pivot rotations are
+ * taken about, so tilting the cut does not swing it off the liver.
+ */
+function pointOn(n: Vec3, d: number, ctx: EngineContext): Vec3 {
+  const c = organCentre(ctx);
   const s = n[0] * c[0] + n[1] * c[1] + n[2] * c[2] - d;
   return [c[0] - n[0] * s, c[1] - n[1] * s, c[2] - n[2] * s];
+}
+
+/** Half-angle of the wide search around the tumour, degrees. */
+export const WIDE_CONE_DEG = 75;
+export const WIDE_DIRECTIONS = 145;
+/** Offsets tried per direction: margins from (target - 2) to (target + 12) mm. */
+const WIDE_BELOW = 2;
+const WIDE_ABOVE = 12;
+
+/**
+ * The search for when the surgeon's cut is far off (or there is none): the
+ * best cut anywhere around the tumour, with no pull back toward the start.
+ *
+ * Every direction within WIDE_CONE_DEG of "straight out of the organ through
+ * the tumour" is tried, each at offsets that put its plane just around the
+ * margin target from the tumour's near face, so all 3615 candidates are
+ * plausible cuts rather than planes that miss the liver. Ranked like the
+ * local search (exact plane-to-tumour margin, fine-grid vessel counts,
+ * near-miss and top candidates re-scored on the fine grid), but on quality
+ * alone: the stay-near-the-start terms are dropped. `start` is used only to
+ * report how far the answer moved.
+ */
+export function optimizeAround(
+  ctx: EngineContext,
+  start: Plane | null,
+  th: Thresholds,
+  fine: EngineContext | null = null,
+): OptimizeResult | null {
+  const t0 = performance.now();
+  const judge = fine ?? ctx;
+  const tumor = tumorPoints(judge.grid);
+  if (tumor.length === 0) return null;
+  let tc: Vec3 = [0, 0, 0];
+  for (let i = 0; i < tumor.length; i += 3) tc = [tc[0] + tumor[i], tc[1] + tumor[i + 1], tc[2] + tumor[i + 2]];
+  tc = [(tc[0] * 3) / tumor.length, (tc[1] * 3) / tumor.length, (tc[2] * 3) / tumor.length];
+  const organC = organCentre(ctx);
+  const axis = normalize([tc[0] - organC[0], tc[1] - organC[1], tc[2] - organC[2]]);
+
+  // Quality only: scored as if every candidate were its own start.
+  const quality = (m: PlanMetrics, n: Vec3, d: number) => score(m, n, d, n, d, th);
+  const fineVessels = fine !== null;
+  const ranked: { n: Vec3; d: number; s: number }[] = [];
+  const nearMiss: { n: Vec3; d: number; s: number }[] = [];
+  let candidates = 0;
+  for (const n of fibonacciCap(axis, WIDE_CONE_DEG, WIDE_DIRECTIONS)) {
+    let tmin = Infinity;
+    for (let i = 0; i < tumor.length; i += 3) {
+      const v = n[0] * tumor[i] + n[1] * tumor[i + 1] + n[2] * tumor[i + 2];
+      if (v < tmin) tmin = v;
+    }
+    const ds: number[] = [];
+    for (let m = th.marginMin - WIDE_BELOW; m <= th.marginMin + WIDE_ABOVE; m++) ds.push(tmin - Math.max(0.5, m));
+    const crossings = fineVessels ? vesselCrossingsAlong(judge.grid, n, ds, { box: judge.box }) : null;
+    ds.forEach((d, k) => {
+      const m = evaluatePlane(ctx, { n, d }, { locate: false, margin: false, vessels: !fineVessels });
+      if (crossings) m.vesselsCrossed = crossings[k];
+      m.marginMm = tmin - d;
+      m.tumorIncomplete = false;
+      const s = quality(m, n, d);
+      ranked.push({ n, d, s });
+      if (m.marginMm < th.marginMin && m.marginMm >= th.marginMin - MARGIN_SLACK_MM) nearMiss.push({ n, d, s: s + weights(th).margin });
+      candidates++;
+    });
+  }
+  ranked.sort((a, b) => b.s - a.s);
+  nearMiss.sort((a, b) => b.s - a.s);
+  const finalists = [...ranked.slice(0, fine ? RESCORE : 1), ...(fine ? nearMiss.slice(0, NEAR_MISSES) : [])];
+  if (start) finalists.push({ n: normalize(start.n), d: start.d, s: 0 });
+
+  let best: { n: Vec3; d: number; s: number; m: PlanMetrics } | null = null;
+  for (const c of finalists) {
+    const m = evaluatePlane(judge, { n: c.n, d: c.d });
+    const s = quality(m, c.n, c.d);
+    if (!best || s > best.s) best = { n: c.n, d: c.d, s, m };
+  }
+  if (!best) return null;
+  const before = start ? evaluatePlane(judge, { n: normalize(start.n), d: start.d }) : best.m;
+  const n0 = start ? normalize(start.n) : best.n;
+  return {
+    plane: { n: best.n, d: best.d },
+    before,
+    after: best.m,
+    angleDeg: angleDeg(best.n, n0),
+    offsetMm: start ? Math.abs(best.d - start.d) : 0,
+    feasible: violations(best.m, th).length === 0,
+    violated: violations(before, th),
+    vessel: before.vesselName ?? (before.nearestVesselMm < 5 ? (ctx.names.get(before.nearestVesselId) ?? null) : null),
+    candidates,
+    ms: performance.now() - t0,
+  };
 }

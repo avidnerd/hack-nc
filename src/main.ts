@@ -74,7 +74,7 @@ import { parseIntent, stripWake, type Intent, type TiltDir } from './voice/inten
 import { SpeechInput } from './voice/stt.ts';
 import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
-import { CONE_DEG, OFFSET_MM, type OptimizeResult } from './planning/optimize.ts';
+import { OFFSET_MM, score, type OptimizeResult } from './planning/optimize.ts';
 import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
 
 /* ------------------------------------------------------------------ globals */
@@ -795,27 +795,6 @@ function throughOrgan(m: PlanMetrics): boolean {
   return m.remnantPct > 2 && m.remnantPct < 99.5;
 }
 
-/**
- * Where the search starts when the surgeon's cut cannot be used: facing away
- * from the organ's centre, just past the margin target around the tumour.
- * Keeps the surgeon's orientation (`keepN`) when it already faces that way.
- */
-function seedPlane(marginMin: number, keepN?: Vec3): Plane | null {
-  if (!grid || grid.tumorIdx.length === 0) return null;
-  const tc = grid.tumorCentroid();
-  const oc = grid.organCentroid();
-  if (!tc || !oc) return null;
-  const out = normalize(sub(tc, oc));
-  let n = out;
-  if (keepN) {
-    const k = dot(keepN, out) < 0 ? scale(keepN, -1) : keepN;
-    if (dot(k, out) > 0.5) n = normalize(k);
-  }
-  let tmin = Infinity;
-  for (const i of grid.tumorIdx) tmin = Math.min(tmin, dot(n, grid.worldAt(i)));
-  return { n, d: tmin - (marginMin + 2) };
-}
-
 async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise<void> {
   if (!engine) return;
   const mine = state.plane.on ? currentPlane() : null;
@@ -835,54 +814,55 @@ async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise
   }
   clearPreview();
 
-  // No cut, or one that misses the liver (a palm held off to the side):
-  // searching 20 degrees around it finds nothing, so start around the tumour.
-  let start: Plane;
-  let note = '';
-  if (usable && mine) {
-    start = mine;
-  } else {
-    const seed = seedPlane(marginMin, mine?.n);
-    if (!seed) {
-      say('Show me a cut first.');
-      return;
-    }
-    start = seed;
-    note = mine ? "Your cut wasn't through the liver, so I started one around the tumor." : 'There was no cut, so I placed one around the tumor.';
-  }
-
+  // A good cut is refined where the surgeon put it. A bad one (or none, or
+  // one that misses the liver) is replaced by the best cut anywhere around
+  // the tumour, however far that is from where it started: the point is the
+  // optimal plan, not a small nudge.
   const t0 = performance.now();
-  let res = await optimizer.run(start, th);
-  // Nothing near that start meets the targets: try once more from the
-  // default cut around the tumour, and take that answer only if it does.
-  const fresh = seedPlane(marginMin);
-  if (res && !res.feasible && fresh && !samePlane(fresh, start)) {
-    const alt = await optimizer.run(fresh, th);
-    if (alt?.feasible) {
-      res = alt;
-      if (usable) note = `Nothing within ${CONE_DEG} degrees of your cut meets your targets, so I started over around the tumor.`;
+  let res: OptimizeResult | null;
+  let note = '';
+  let wide = false;
+  if (!usable || !mine) {
+    toast('Searching all around the tumor…', 'info');
+    res = await optimizer.run(mine, th, 'wide');
+    wide = true;
+    note = mine ? "Your cut wasn't through the liver, so I searched all around the tumor." : 'There was no cut, so I searched all around the tumor.';
+  } else {
+    res = await optimizer.run(mine, th, 'local');
+    if (res && !res.feasible) {
+      toast('Searching all around the tumor…', 'info');
+      const far = await optimizer.run(mine, th, 'wide');
+      const quality = (r: OptimizeResult) => score(r.after, r.plane.n, r.plane.d, r.plane.n, r.plane.d, th);
+      if (far && quality(far) > quality(res) + 0.5) {
+        res = far;
+        wide = true;
+      }
     }
+  }
+  if (!res) {
+    say(state.plane.on ? "Couldn't optimize." : 'Show me a cut first.');
+    return;
   }
   const ms = performance.now() - t0;
   patch('perf', { optimizeMs: Math.round(ms) });
   console.info(`[optimize] ${res?.candidates ?? 0} candidates, search ${res?.ms.toFixed(0)} ms, round trip ${ms.toFixed(0)} ms`);
-  if (!res) {
-    say("Couldn't optimize.");
-    return;
-  }
   // The search ranks on the 64^3 grid; the numbers spoken and shown come from
   // the 128^3 grid, exactly like every other number on screen.
-  const before = evaluatePlane(engine, usable && mine ? mine : start);
+  const before = mine ? evaluatePlane(engine, mine) : res.after;
   const after = evaluatePlane(engine, res.plane);
   lastOptimize = { res: { ...res, before, after }, th, priority };
   const moved = note !== '' || res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
+  const reason = () =>
+    optimizeReason(res, before, after, th, {
+      preview: req.preview,
+      priority,
+      ...(req.preview ? { ask: askPhrase(req, marginMin, remnantMin) } : {}),
+    });
   const line = note
-    ? restartReply(note, usable ? before : null, after, th, priority, req.preview === true)
-    : optimizeReason(res, before, after, th, {
-        preview: req.preview,
-        priority,
-        ...(req.preview ? { ask: askPhrase(req, marginMin, remnantMin) } : {}),
-      });
+    ? restartReply(note, null, after, th, priority, req.preview === true)
+    : wide
+      ? `Nothing near your cut meets your targets, so I searched all around the tumor. ${reason()}`
+      : reason();
   if (req.preview) {
     if (moved) {
       preview = { plane: res.plane, ...(newLimits ? { marginMin, remnantMin } : {}) };
