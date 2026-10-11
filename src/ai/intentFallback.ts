@@ -21,6 +21,8 @@ Reply with ONE JSON object and nothing else. Allowed objects:
    limit, priority "vessels" to spare vessels even at some margin, "remnant" to keep the most liver, widen for "a bigger
    margin". Set preview when it is a question or hypothetical ("what if", "would", "could", "is there", "is it possible").
 {"kind":"shiftPlane","mm":number,"preview"?:true}   move the cut along its normal; positive = toward the tumor
+{"kind":"tiltPlane","dir":"left"|"right"|"up"|"down"|"toward"|"away"|"clockwise"|"counterclockwise","deg":number,"preview"?:true}   turn the cut as seen on screen
+{"kind":"straightenPlane"}   square the cut to the nearest standard plane
 {"kind":"applyPreview"}   "do it", "use that one" after a what-if
 {"kind":"undo"}   put the cut back where it was before the last change
 {"kind":"explain","about"?:"margin"|"remnant"|"vessels"}   "why did you move it"; about = what limits that number ("what's limiting the margin")
@@ -35,7 +37,7 @@ Reply with ONE JSON object and nothing else. Allowed objects:
 {"kind":"loadCase","id":"liver"|"aorta"}
 {"kind":"nudgeStent","mm":number}
 {"kind":"plane","on":true|false}
-{"kind":"cut","orientation":"sagittal"|"coronal"|"axial","through":"tumor"|"liver"|"aorta"|"kidneys"|"renal_arteries"|null,"offsetMm":number|null}
+{"kind":"cut","orientation":"sagittal"|"coronal"|"axial"|"oblique","between"?:"tumor"|"portal_vein"|"ivc"|"hepatic_vessels"|"aorta","through":"tumor"|"liver"|"aorta"|"kidneys"|"renal_arteries"|null,"offsetMm":number|null}
 {"kind":"distance","a":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"liver"|"kidneys","b":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"liver"|"kidneys"}
 {"kind":"query","what":"margin"|"remnant"|"vessels"|"summary"}   summary = "is this cut OK", "how does the plan look"
 {"kind":"relation","a":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"hepatic_vessels"|"liver"|"kidneys"|"kidney_left"|"kidney_right","b":"tumor"|"portal_vein"|"ivc"|"aorta"|"vessels"|"hepatic_vessels"|"liver"|"kidneys"|"kidney_left"|"kidney_right"}
@@ -107,7 +109,7 @@ export function validate(o: Record<string, unknown>): Intent | null {
     case 'measure':
       return { kind: 'measure', what: typeof o.what === 'string' ? o.what : 'tumor' };
     case 'cut': {
-      const orientations = ['sagittal', 'coronal', 'axial'] as const;
+      const orientations = ['sagittal', 'coronal', 'axial', 'oblique'] as const;
       const orientation = orientations.find((x) => x === o.orientation);
       if (!orientation) return null;
       return {
@@ -115,6 +117,7 @@ export function validate(o: Record<string, unknown>): Intent | null {
         orientation,
         through: typeof o.through === 'string' ? o.through : null,
         offsetMm: num(o.offsetMm),
+        ...(typeof o.between === 'string' ? { between: o.between } : {}),
       };
     }
     case 'distance':
@@ -129,6 +132,13 @@ export function validate(o: Record<string, unknown>): Intent | null {
     }
     case 'explain':
       return o.about === 'margin' || o.about === 'remnant' || o.about === 'vessels' ? { kind: 'explain', about: o.about } : { kind: 'explain' };
+    case 'tiltPlane': {
+      const dirs = ['left', 'right', 'up', 'down', 'toward', 'away', 'clockwise', 'counterclockwise'] as const;
+      const dir = dirs.find((d) => d === o.dir);
+      const deg = num(o.deg) ?? 10;
+      return dir && deg > 0 ? { kind: 'tiltPlane', dir, deg: Math.min(45, deg), ...(o.preview === true ? { preview: true } : {}) } : null;
+    }
+    case 'straightenPlane':
     case 'applyPreview':
     case 'undo':
       return { kind: o.kind };

@@ -117,6 +117,26 @@ export function optimizeReason(
   return `${met ? 'Optimized: moved' : 'Moved'} ${how} ${motive(before, after, th, res)}. ${cap(changeLine(before, after))}.${left ? ' ' + left : ''}`;
 }
 
+/**
+ * When the search had to start from its own cut (no cut, a cut that missed
+ * the liver, or nothing near the surgeon's cut that works): say so, then the
+ * numbers, against the surgeon's cut when there was a usable one.
+ */
+export function restartReply(
+  note: string,
+  before: PlanMetrics | null,
+  after: PlanMetrics,
+  th: Thresholds,
+  priority: OptimizePriority = 'balanced',
+  preview = false,
+): string {
+  const left = shortfall(before ?? after, after, th, priority);
+  return (
+    `${note} ${cap(changeLine(before ?? after, after))}.${left ? ' ' + left : ' Every target is met.'}` +
+    (preview ? ` It's outlined; say "do it" to use it.` : '')
+  );
+}
+
 /** The answer to "why": what was wrong, what the search weighs, what it found. */
 export function optimizeExplanation(res: OptimizeResult, th: Thresholds, priority: OptimizePriority = 'balanced'): string {
   const b = res.before;

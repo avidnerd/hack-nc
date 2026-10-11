@@ -110,6 +110,22 @@ describe('intent grammar', () => {
     ['set margin to twenty five', { kind: 'setThreshold', name: 'marginMin', value: 25 }],
   ])('"%s"', (phrase, intent) => expect(parseIntent(phrase)).toEqual(intent));
 
+  // Placing and steering the cut by voice alone.
+  it.each([
+    ['tilt the cut 10 degrees to the left', { kind: 'tiltPlane', dir: 'left', deg: 10 }],
+    ['angle the plane down a bit', { kind: 'tiltPlane', dir: 'down', deg: 5 }],
+    ['rotate it clockwise 20 degrees', { kind: 'tiltPlane', dir: 'clockwise', deg: 20 }],
+    ['tilt it counterclockwise', { kind: 'tiltPlane', dir: 'counterclockwise', deg: 10 }],
+    ['tilt it fifteen degrees toward me', { kind: 'tiltPlane', dir: 'toward', deg: 15 }],
+    ['what if I tilt the cut 15 degrees up', { kind: 'tiltPlane', dir: 'up', deg: 15, preview: true }],
+    ['straighten the cut', { kind: 'straightenPlane' }],
+    ['make a cut 15 millimeters from the tumor', { kind: 'cut', orientation: 'oblique', through: 'tumor', offsetMm: 15 }],
+    ['give me an oblique cut', { kind: 'cut', orientation: 'oblique', through: null, offsetMm: null }],
+    ['cut between the tumor and the portal vein', { kind: 'cut', orientation: 'oblique', through: 'tumor', offsetMm: null, between: 'portal_vein' }],
+    ['make a sagittal cut 12 millimeters from the tumor', { kind: 'cut', orientation: 'sagittal', through: 'tumor', offsetMm: 12 }],
+    ['show me the tumor relative to the portal vein', { kind: 'relation', a: 'tumor', b: 'portal_vein' }],
+  ])('"%s"', (phrase, intent) => expect(parseIntent(phrase)).toEqual(intent));
+
   it('a question that only mentions the cut does not switch the plane on', () => {
     expect(parseIntent('is the cut too close to anything')).toBeNull();
     expect(parseIntent('show the cut')).toEqual({ kind: 'plane', on: true });

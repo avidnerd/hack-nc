@@ -46,7 +46,22 @@ export type Intent =
   | { kind: 'loadCase'; id: string }
   | { kind: 'nudgeStent'; mm: number }
   | { kind: 'plane'; on: boolean }
-  | { kind: 'cut'; orientation: 'sagittal' | 'coronal' | 'axial'; through: string | null; offsetMm: number | null }
+  /**
+   * A described cut. `oblique` faces away from the organ's centre through the
+   * structure; with `between`, the cut sits halfway across the gap between
+   * `through` and `between`, square to it.
+   */
+  | {
+      kind: 'cut';
+      orientation: 'sagittal' | 'coronal' | 'axial' | 'oblique';
+      through: string | null;
+      offsetMm: number | null;
+      between?: string;
+    }
+  /** Turn the cut as seen on screen: its face leans `dir` by `deg`. */
+  | { kind: 'tiltPlane'; dir: TiltDir; deg: number; preview?: boolean }
+  /** Square the cut to the nearest of sagittal, coronal, axial. */
+  | { kind: 'straightenPlane' }
   | { kind: 'distance'; a: string; b: string }
   | { kind: 'query'; what: 'margin' | 'remnant' | 'vessels' | 'summary' }
   | { kind: 'relation'; a: string; b: string }
@@ -60,6 +75,8 @@ export type Intent =
   | { kind: 'cancel' }
   | { kind: 'tutorial' };
 
+export type TiltDir = 'left' | 'right' | 'up' | 'down' | 'toward' | 'away' | 'clockwise' | 'counterclockwise';
+
 /** Every intent kind, for the LLM fallback's JSON schema. */
 export const INTENT_KINDS = [
   'window',
@@ -68,6 +85,8 @@ export const INTENT_KINDS = [
   'removeDevice',
   'optimize',
   'shiftPlane',
+  'tiltPlane',
+  'straightenPlane',
   'applyPreview',
   'undo',
   'explain',
@@ -151,6 +170,10 @@ const STRUCTURE_ALIASES: Record<string, string> = {
   vein: 'vessels',
   veins: 'vessels',
   'hepatic vein': 'vessels',
+  'hepatic vessel': 'hepatic_vessels',
+  'hepatic vessels': 'hepatic_vessels',
+  'intrahepatic vessel': 'hepatic_vessels',
+  'intrahepatic vessels': 'hepatic_vessels',
   'portal vein': 'portal_vein',
   artery: 'aorta',
   aorta: 'aorta',
@@ -304,7 +327,7 @@ export function parseIntent(text: string): Intent | null {
   }
   {
     const named = matchStructures(s).filter((k) => k !== 'stent');
-    if (/\b(show|display|view|see|look at|visuali[sz]e)\b/.test(s) && named.length >= 2 && /\b(relative to|in relation to|relationship|relation|next to|against|with respect to|and)\b/.test(s)) {
+    if (/\b(show|display|view|see|look at|visuali[sz]e)\b/.test(s) && named.length >= 2 && !/\b(cut|plane|slice)\b.*\bbetween\b/.test(s) && /\b(relative to|in relation to|relationship|relation|next to|against|with respect to|and)\b/.test(s)) {
       return { kind: 'relation', a: named[0], b: named[1] };
     }
     if (/\b(focus|zoom( in)?|cent(er|re)|fly|frame|take me|go)\b.*\b(on|to|at|in)\b/.test(s) && named.length === 1) {
@@ -365,6 +388,47 @@ export function parseIntent(text: string): Intent | null {
     const away = /\b(away|further|farther|back from)\b/.test(s);
     if (/\b(move|moved|shift|shifted|slide|push|pushed|bring|brought|put|nudge|nudged)\b/.test(s) && /\b(cut|plane|it)\b/.test(s) && mm !== null && (toward || away)) {
       return { kind: 'shiftPlane', mm: toward ? mm : -mm, ...(hypothetical ? { preview: true } : {}) };
+    }
+    // Tilting by voice, as seen on screen.
+    if (/\b(tilt|tilted|angle|angled|rotate|rotated|turn|turned|swing|lean|tip|pivot)\b/.test(s) && /\b(cut|plane|slice|it)\b/.test(s)) {
+      const dir: TiltDir | null = /\b(counter-?clockwise|anti-?clockwise)\b/.test(s)
+        ? 'counterclockwise'
+        : /\bclockwise\b/.test(s)
+          ? 'clockwise'
+          : /\bleft\b/.test(s)
+            ? 'left'
+            : /\bright\b/.test(s)
+              ? 'right'
+              : /\b(up|upward|upwards|higher|head)\b/.test(s)
+                ? 'up'
+                : /\b(down|downward|downwards|lower|feet|foot)\b/.test(s)
+                  ? 'down'
+                  : /\b(toward|towards) (me|us|the camera|the viewer)\b/.test(s)
+                    ? 'toward'
+                    : /\b(away from (me|us|the camera)|back|backwards?)\b/.test(s)
+                      ? 'away'
+                      : null;
+      if (dir) {
+        const deg = /(\d+(?:\.\d+)?|\b[a-z]+\b)\s*(?:degrees?|deg)\b/.exec(s);
+        const n = deg ? (/\d/.test(deg[1]) ? parseFloat(deg[1]) : parseNumber(deg[1])) : null;
+        const amount = n ?? (/\b(a (little )?bit|slightly|a touch|a little|a hair)\b/.test(s) ? 5 : 10);
+        return { kind: 'tiltPlane', dir, deg: Math.min(45, amount), ...(hypothetical ? { preview: true } : {}) };
+      }
+    }
+    if (/\b(straighten|square( it)? up|level|align)\b.*\b(cut|plane|it)\b|\bmake (it|the cut|the plane) (straight|square|level)\b/.test(s)) {
+      return { kind: 'straightenPlane' };
+    }
+    // Described cuts without an anatomical plane: "a cut 15 mm from the
+    // tumor", "an oblique cut", "a cut between the tumor and the portal vein".
+    if (/\b(cut|plane|slice)\b/.test(s) && !/\b(sagittal|coronal|axial|transverse|horizontal|frontal)\b/.test(s)) {
+      const named = matchStructures(s).filter((k) => k !== 'stent');
+      if (/\bbetween\b/.test(s) && named.length >= 2) {
+        return { kind: 'cut', orientation: 'oblique', through: named[0], offsetMm: null, between: named[1] };
+      }
+      const describing = /\b(make|place|put|give me|cut|create|draw|add|do|start with|try|want|need|show)\b/.test(s);
+      if (/\boblique\b/.test(s) || (describing && mm !== null && /\b(from|off|away|clear|around|margin|beside)\b/.test(s))) {
+        return { kind: 'cut', orientation: 'oblique', through: named[0] ?? null, offsetMm: mm };
+      }
     }
     const opts = planOptions(s);
     const asked = /\b(optimi[sz]e|optimi[sz]ation|fix|improve|correct|re-?plan|re-?optimi[sz]e|better (cut|plane|one)|do better|best (cut|plane|one)|as good as (you|it) can|best you can|best possible|(find|get|give me|is there|are there) (a|an|the|any) ?\w* (cut|plane))\b/.test(s);
@@ -516,6 +580,10 @@ export const VOICE_HELP: [string, string][] = [
   ['spare the vessels / keep more liver', 'optimize with that priority'],
   ['why did you move it', 'explain the last change'],
   ['undo', 'put your cut back'],
+  ['a cut 15 mm from the tumour', 'oblique cut, facing away from the organ'],
+  ['cut between the tumour and the portal vein', 'halfway across the gap'],
+  ['tilt the cut 10 degrees left', 'also up, down, clockwise; "a bit" is 5'],
+  ['straighten the cut', 'square it to the nearest standard plane'],
   ['is this cut ok', 'every number against its target'],
   ['measure the kidney', 'standard measurement + normal range'],
   ['show me the tumour relative to the portal vein', 'fly to it, measure, highlight'],
