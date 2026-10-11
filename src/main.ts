@@ -21,6 +21,7 @@ import {
   changeLine,
   optimizeExplanation,
   optimizeReason,
+  restartReply,
   patientCallouts,
   planSummary,
   shiftReply,
@@ -29,7 +30,7 @@ import {
   type PatientFacts,
 } from './ai/narrate.ts';
 import { CASES, loadCase } from './caseLoader.ts';
-import { clamp, easeInOut, lerp, normalize, slerp } from './coords.ts';
+import { cameraBasis, clamp, cross, dot, easeInOut, length, lerp, normalize, scale, slerp, sub } from './coords.ts';
 import { StentSession } from './devices/stentSession.ts';
 import { GestureTracker } from './input/gestures.ts';
 import { HandController } from './input/handControl.ts';
@@ -46,7 +47,7 @@ import { PlanningGrid } from './planning/volume.ts';
 import { AnatomyView } from './render/anatomy.ts';
 import { Overlays } from './render/overlays.ts';
 import { measureStructure } from './planning/anatomyMeasure.ts';
-import { idsFor, namedCut, renalLevelCut, type Orientation } from './planning/smartMeasure.ts';
+import { idsFor, namedCut, renalLevelCut, structureDistance, type Orientation } from './planning/smartMeasure.ts';
 import { Copilot } from './copilot/copilot.ts';
 import { Bench } from './copilot/bench.ts';
 import { Tutorial, tutorialDone } from './tutorial/tutorial.ts';
@@ -69,11 +70,11 @@ import {
 } from './state.ts';
 import { Guide } from './ui/guide.ts';
 import { Hud } from './ui/hud.ts';
-import { parseIntent, stripWake, type Intent } from './voice/intents.ts';
+import { parseIntent, stripWake, type Intent, type TiltDir } from './voice/intents.ts';
 import { SpeechInput } from './voice/stt.ts';
 import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
-import { OFFSET_MM, type OptimizeResult } from './planning/optimize.ts';
+import { CONE_DEG, OFFSET_MM, type OptimizeResult } from './planning/optimize.ts';
 import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
 
 /* ------------------------------------------------------------------ globals */
@@ -581,6 +582,166 @@ function tweenCamera(to: Partial<CameraState>, ms = 700): void {
   camTween = { from: { ...state.camera }, to, start: performance.now(), ms };
 }
 
+/* ------------------------------------------------- cuts described by voice */
+
+/** Put the cut at `to` by voice: animated and undoable when a cut is up, set directly otherwise. */
+function placeCut(to: Plane): void {
+  if (state.plane.on) movePlane(to, 700);
+  else patch('plane', { n: to.n, d: to.d });
+  patch('plane', { on: true });
+}
+
+function voiceCutAllowed(): boolean {
+  if (!engine || !grid) return false;
+  if (state.plane.locked) {
+    say('The cut is locked. Say "unlock" first.');
+    return false;
+  }
+  return true;
+}
+
+/** The point of the current cut nearest the tumour (or the organ): turns pivot there. */
+function cutPivot(): Vec3 {
+  const c = grid?.tumorCentroid() ?? grid?.organCentroid() ?? renderer.frame?.centerMm ?? [0, 0, 0];
+  const n = state.plane.n;
+  return sub(c, scale(n, dot(n, c) - state.plane.d));
+}
+
+/** Rodrigues: `v` turned by `rad` about unit `k`. */
+function rotateAbout(v: Vec3, k: Vec3, rad: number): Vec3 {
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  const kv = cross(k, v);
+  const kd = dot(k, v) * (1 - c);
+  return [v[0] * c + kv[0] * s + k[0] * kd, v[1] * c + kv[1] * s + k[1] * kd, v[2] * c + kv[2] * s + k[2] * kd];
+}
+
+const TILT_WORD: Record<TiltDir, string> = {
+  left: 'left', right: 'right', up: 'up', down: 'down',
+  toward: 'toward you', away: 'away from you', clockwise: 'clockwise', counterclockwise: 'counterclockwise',
+};
+
+/**
+ * "Tilt the cut 10 degrees left": as seen on screen, the cut face leans that
+ * way (its normal turns toward the direction), pivoting where the cut passes
+ * closest to the tumour so it stays put around the lesion.
+ */
+function tiltPlane(dir: TiltDir, deg: number, previewOnly: boolean): void {
+  if (!state.plane.on) {
+    say('Show me a cut first.');
+    return;
+  }
+  if (!previewOnly && !voiceCutAllowed()) return;
+  if (!engine) return;
+  const c = state.camera;
+  const { right, up, forward } = cameraBasis(c.yaw + c.headYaw, c.pitch + c.headPitch);
+  const n0 = state.plane.n;
+  const rad = (deg * Math.PI) / 180;
+  let n: Vec3;
+  if (dir === 'clockwise' || dir === 'counterclockwise') {
+    // `forward` points into the screen: a positive turn about it reads clockwise.
+    n = rotateAbout(n0, forward, dir === 'clockwise' ? rad : -rad);
+  } else {
+    const t = { left: scale(right, -1), right, up, down: scale(up, -1), toward: scale(forward, -1), away: forward }[dir];
+    const axis = cross(n0, t);
+    if (length(axis) < 1e-3) {
+      say(`The cut already faces ${TILT_WORD[dir]}.`);
+      return;
+    }
+    n = rotateAbout(n0, normalize(axis), rad);
+  }
+  n = normalize(n);
+  const to: Plane = { n, d: dot(n, cutPivot()) };
+  const before = evaluatePlane(engine, currentPlane(), { locate: false });
+  const after = evaluatePlane(engine, to, { locate: false });
+  clearPreview();
+  if (previewOnly) {
+    preview = { plane: to };
+    set('ghostPlane', to);
+    say(`Tilted ${Math.round(deg)} degrees ${TILT_WORD[dir]}: ${changeLine(before, after)}. It's outlined; say "do it" to use it.`);
+    return;
+  }
+  movePlane(to, 500);
+  say(`Tilted ${Math.round(deg)} degrees ${TILT_WORD[dir]}. ${capFirst(changeLine(before, after))}.`);
+}
+
+/** "Straighten the cut": the nearest anatomical plane, through the same pivot. */
+function straightenPlane(): void {
+  if (!state.plane.on) {
+    say('Show me a cut first.');
+    return;
+  }
+  if (!voiceCutAllowed() || !engine) return;
+  const n0 = state.plane.n;
+  const axis = [0, 1, 2].reduce((best, i) => (Math.abs(n0[i]) > Math.abs(n0[best]) ? i : best), 0);
+  const n: Vec3 = [0, 0, 0];
+  n[axis] = Math.sign(n0[axis]) || 1;
+  const to: Plane = { n, d: dot(n, cutPivot()) };
+  const before = evaluatePlane(engine, currentPlane(), { locate: false });
+  const after = evaluatePlane(engine, to, { locate: false });
+  movePlane(to, 500);
+  say(`Straightened to ${['a sagittal', 'a coronal', 'an axial'][axis]} cut. ${capFirst(changeLine(before, after))}.`);
+}
+
+/**
+ * A cut described without an anatomical plane. With `between`, halfway
+ * across the closest gap between two structures, square to it, with the
+ * tumour on the side removed. Otherwise oblique: facing straight away from
+ * the organ's centre, `offsetMm` (default 10) clear of the structure.
+ */
+function describedCut(through: string | null, offsetMm: number | null, between: string | null): void {
+  const data = state.data;
+  if (!data || !voiceCutAllowed() || !engine || !grid) return;
+  const name = (k: string) => k.replace(/_/g, ' ');
+  let to: Plane;
+  let where: string;
+  if (between) {
+    const a = through ?? 'tumor';
+    const r = structureDistance(data, idsFor(data, a), idsFor(data, between), 120);
+    if (!r) {
+      say(`I can't find both the ${name(a)} and the ${name(between)} close enough to cut between them.`);
+      return;
+    }
+    if (r.mm < 1) {
+      say(`The ${name(a)} and the ${name(between)} touch: there is no gap to cut through.`);
+      return;
+    }
+    // The tumour (or the first-named structure) goes on the resected side.
+    const [keep, take] = between === 'tumor' ? [r.a, r.b] : [r.b, r.a];
+    const n = normalize(sub(take, keep));
+    const mid: Vec3 = [(r.a[0] + r.b[0]) / 2, (r.a[1] + r.b[1]) / 2, (r.a[2] + r.b[2]) / 2];
+    to = { n, d: dot(n, mid) };
+    where = `halfway between the ${name(a)} and the ${name(between)}, ${Math.round(r.mm / 2)} millimeters from each`;
+  } else {
+    const subject = through ?? 'tumor';
+    if (subject !== 'tumor' || grid.tumorIdx.length === 0) {
+      say('Oblique cuts are placed around the tumor. Name a plane for other structures, like "sagittal cut through the kidney".');
+      return;
+    }
+    const tc = grid.tumorCentroid();
+    const oc = grid.organCentroid();
+    if (!tc || !oc) return;
+    const n = normalize(sub(tc, oc));
+    let tmin = Infinity;
+    for (const i of grid.tumorIdx) tmin = Math.min(tmin, dot(n, grid.worldAt(i)));
+    const off = offsetMm ?? 10;
+    to = { n, d: tmin - off };
+    where = `${Math.round(off)} millimeters from the tumor, facing away from the liver's center`;
+  }
+  placeCut(to);
+  const m = evaluatePlane(engine, to, { locate: false });
+  const nums = data.meta.kind === 'liver'
+    ? m.tumorIncomplete
+      ? ' Tumor not fully resected.'
+      : ` Margin ${Math.round(m.marginMm)} millimeters, remnant ${Math.round(m.remnantPct)} percent${m.vesselsCrossed ? `, crosses ${m.vesselsCrossed} vessel${m.vesselsCrossed > 1 ? 's' : ''}` : ''}.`
+    : '';
+  say(`Cut ${where}.${nums}`);
+}
+
+function capFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /* ---------------------------------------------------------------- optimize */
 
 /** A what-if answer waiting for "do it": the outlined cut and the limits it was found under. */
@@ -629,17 +790,41 @@ function askPhrase(req: Extract<Intent, { kind: 'optimize' }>, marginMin: number
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise<void> {
-  if (!engine || !state.plane.on) {
-    say('Show me a cut first.');
-    return;
+/** True when a cut actually divides the organ (not off to one side of it). */
+function throughOrgan(m: PlanMetrics): boolean {
+  return m.remnantPct > 2 && m.remnantPct < 99.5;
+}
+
+/**
+ * Where the search starts when the surgeon's cut cannot be used: facing away
+ * from the organ's centre, just past the margin target around the tumour.
+ * Keeps the surgeon's orientation (`keepN`) when it already faces that way.
+ */
+function seedPlane(marginMin: number, keepN?: Vec3): Plane | null {
+  if (!grid || grid.tumorIdx.length === 0) return null;
+  const tc = grid.tumorCentroid();
+  const oc = grid.organCentroid();
+  if (!tc || !oc) return null;
+  const out = normalize(sub(tc, oc));
+  let n = out;
+  if (keepN) {
+    const k = dot(keepN, out) < 0 ? scale(keepN, -1) : keepN;
+    if (dot(k, out) > 0.5) n = normalize(k);
   }
-  const start = currentPlane();
-  const now = evaluatePlane(engine, start, { locate: false });
+  let tmin = Infinity;
+  for (const i of grid.tumorIdx) tmin = Math.min(tmin, dot(n, grid.worldAt(i)));
+  return { n, d: tmin - (marginMin + 2) };
+}
+
+async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise<void> {
+  if (!engine) return;
+  const mine = state.plane.on ? currentPlane() : null;
+  const mineM = mine ? evaluatePlane(engine, mine, { locate: false }) : null;
+  const usable = mineM !== null && throughOrgan(mineM);
   const priority: OptimizePriority = req.priority ?? 'balanced';
   let marginMin = req.marginMm ?? state.thresholds.marginMin;
   // "A bigger margin": 5 mm more than the cut has now, never below the target.
-  if (req.widen) marginMin = Math.max(marginMin, Math.ceil(now.tumorIncomplete ? 0 : now.marginMm) + 5);
+  if (req.widen) marginMin = Math.max(marginMin, Math.ceil(usable && !mineM.tumorIncomplete ? mineM.marginMm : 0) + 5);
   const remnantMin = req.remnantPct ?? state.thresholds.remnantMin;
   const th: Thresholds = { ...state.thresholds, marginMin, remnantMin, priority };
   const newLimits = marginMin !== state.thresholds.marginMin || remnantMin !== state.thresholds.remnantMin;
@@ -650,8 +835,34 @@ async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise
   }
   clearPreview();
 
+  // No cut, or one that misses the liver (a palm held off to the side):
+  // searching 20 degrees around it finds nothing, so start around the tumour.
+  let start: Plane;
+  let note = '';
+  if (usable && mine) {
+    start = mine;
+  } else {
+    const seed = seedPlane(marginMin, mine?.n);
+    if (!seed) {
+      say('Show me a cut first.');
+      return;
+    }
+    start = seed;
+    note = mine ? "Your cut wasn't through the liver, so I started one around the tumor." : 'There was no cut, so I placed one around the tumor.';
+  }
+
   const t0 = performance.now();
-  const res = await optimizer.run(start, th);
+  let res = await optimizer.run(start, th);
+  // Nothing near that start meets the targets: try once more from the
+  // default cut around the tumour, and take that answer only if it does.
+  const fresh = seedPlane(marginMin);
+  if (res && !res.feasible && fresh && !samePlane(fresh, start)) {
+    const alt = await optimizer.run(fresh, th);
+    if (alt?.feasible) {
+      res = alt;
+      if (usable) note = `Nothing within ${CONE_DEG} degrees of your cut meets your targets, so I started over around the tumor.`;
+    }
+  }
   const ms = performance.now() - t0;
   patch('perf', { optimizeMs: Math.round(ms) });
   console.info(`[optimize] ${res?.candidates ?? 0} candidates, search ${res?.ms.toFixed(0)} ms, round trip ${ms.toFixed(0)} ms`);
@@ -661,22 +872,24 @@ async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise
   }
   // The search ranks on the 64^3 grid; the numbers spoken and shown come from
   // the 128^3 grid, exactly like every other number on screen.
-  const before = evaluatePlane(engine, start);
+  const before = evaluatePlane(engine, usable && mine ? mine : start);
   const after = evaluatePlane(engine, res.plane);
   lastOptimize = { res: { ...res, before, after }, th, priority };
-  const moved = res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
-  const line = optimizeReason(res, before, after, th, {
-    preview: req.preview,
-    priority,
-    ...(req.preview ? { ask: askPhrase(req, marginMin, remnantMin) } : {}),
-  });
+  const moved = note !== '' || res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
+  const line = note
+    ? restartReply(note, usable ? before : null, after, th, priority, req.preview === true)
+    : optimizeReason(res, before, after, th, {
+        preview: req.preview,
+        priority,
+        ...(req.preview ? { ask: askPhrase(req, marginMin, remnantMin) } : {}),
+      });
   if (req.preview) {
     if (moved) {
       preview = { plane: res.plane, ...(newLimits ? { marginMin, remnantMin } : {}) };
       set('ghostPlane', res.plane);
     }
   } else {
-    if (moved) movePlane(res.plane);
+    if (moved) placeCut(res.plane);
     if (res.feasible) speech.chord();
     toast('Planar approximation: real resections follow Couinaud segments', 'info');
   }
@@ -1224,7 +1437,16 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       break;
 
     case 'cut':
-      namedCutIntent(intent.orientation, intent.through, intent.offsetMm);
+      if (intent.orientation === 'oblique') describedCut(intent.through, intent.offsetMm, intent.between ?? null);
+      else namedCutIntent(intent.orientation, intent.through, intent.offsetMm);
+      break;
+
+    case 'tiltPlane':
+      tiltPlane(intent.dir, intent.deg, intent.preview === true);
+      break;
+
+    case 'straightenPlane':
+      straightenPlane();
       break;
 
     // "How far is X from Y" gets the same view as "show me X relative to Y".
