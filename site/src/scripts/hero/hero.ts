@@ -10,7 +10,7 @@
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-import { cameraDir, type Vec3 } from '@app/coords.ts';
+import { cameraDir, dot, normalize, sub, type Vec3 } from '@app/coords.ts';
 
 import { HeroRenderer, loadHero, type HeroData } from './renderer.ts';
 
@@ -120,11 +120,11 @@ export async function mountHero(root: HTMLElement): Promise<void> {
   let data: HeroData;
   try {
     data = await loadHero('/data/liver/lo/', (f) => {
-      counter.textContent = `LOADING VOLUME ${Math.round(f * 100)}%`;
+      counter.textContent = `Loading CT ${Math.round(f * 100)}%`;
     });
   } catch (err) {
     console.warn('[hero] volume failed to load', err);
-    counter.textContent = 'VOLUME UNAVAILABLE';
+    counter.textContent = 'The CT could not be loaded.';
     return;
   }
 
@@ -136,6 +136,9 @@ export async function mountHero(root: HTMLElement): Promise<void> {
   hero.pitch = VIEW_PITCH;
 
   let hand: import('./hand.ts').HandSession | null = null;
+  // Whichever input moved last owns the plane: the scroll sweep, or the
+  // pointer, which slides a blade through the torso under the cursor.
+  let mode: 'scroll' | 'pointer' = 'scroll';
 
   const applyScroll = () => {
     const d = sweepAt(sweep, progress);
@@ -146,7 +149,73 @@ export async function mountHero(root: HTMLElement): Promise<void> {
   };
   applyScroll();
   onScroll = () => {
-    if (!hand?.steering) applyScroll();
+    if (!hand?.steering && mode === 'scroll') applyScroll();
+  };
+
+  /* ---- pointer: a blade under the cursor ---- */
+  const target = { x: 0.6, y: 0.5 };
+  const cur = { x: 0.6, y: 0.5 };
+  root.addEventListener('pointermove', (e) => {
+    if (hand?.steering || e.pointerType === 'touch') return;
+    const r = canvas.getBoundingClientRect();
+    target.x = (e.clientX - r.left) / r.width;
+    target.y = (e.clientY - r.top) / r.height;
+    if (mode !== 'pointer') {
+      cur.x = target.x;
+      cur.y = target.y;
+      mode = 'pointer';
+      root.dataset.pointer = '';
+    }
+  });
+  // Scrolling hands the plane back to the sweep.
+  addEventListener(
+    'wheel',
+    () => {
+      if (mode !== 'pointer') return;
+      mode = 'scroll';
+      root.removeAttribute('data-pointer');
+      applyScroll();
+    },
+    { passive: true },
+  );
+  const applyPointer = () => {
+    cur.x += (target.x - cur.x) * 0.22;
+    cur.y += (target.y - cur.y) * 0.22;
+    const { right, up, forward } = hero.basis();
+    // Up and down turns the blade around the cursor; it always leans toward
+    // the viewer so the cut face is seen, never edge-on. Everything left of
+    // the cursor is resected, which is the side the tumour is on: cut to its
+    // right and the margin reads positive, cut through it and it reads 0.
+    const turn = (cur.y - 0.5) * 1.3;
+    const lean = 38 * DEG;
+    const across: Vec3 = [0, 1, 2].map((k) => right[k] * Math.cos(turn) + up[k] * Math.sin(turn)) as Vec3;
+    const n = normalize([0, 1, 2].map((k) => -across[k] * Math.cos(lean) - forward[k] * Math.sin(lean)) as Vec3);
+    const r = canvas.getBoundingClientRect();
+    const ray = hero.ray(r.left + cur.x * r.width, r.top + cur.y * r.height);
+    const denom = dot(ray.d, forward);
+    const t = Math.abs(denom) > 1e-6 ? dot(sub(pivot, ray.o), forward) / denom : 0;
+    const under: Vec3 = [0, 1, 2].map((k) => ray.o[k] + ray.d[k] * t) as Vec3;
+    hero.setPlane(true, n, dot(n, under));
+    hero.setVesselGlow(0.55);
+  };
+
+  /* ---- live numbers, from the app's planning engine ---- */
+  const live = root.querySelector<HTMLElement>('[data-hero-live]');
+  const out = (k: string) => live?.querySelector<HTMLElement>(`[data-v="${k}"]`);
+  let planner: import('./planning.ts').LivePlanner | null = null;
+  let lastKey = '';
+  const updateNumbers = () => {
+    if (!planner || !live) return;
+    const { on, n, d } = hero.plane;
+    const key = on ? `${n.map((x) => x.toFixed(3))}${d.toFixed(1)}` : 'off';
+    if (key === lastKey) return;
+    lastKey = key;
+    const m = on ? planner.evaluate(n, d) : null;
+    const uncut = !m || m.remnantPct > 99.95;
+    out('remnant')!.textContent = uncut ? '100' : m.remnantPct.toFixed(1);
+    out('margin')!.textContent = uncut ? '—' : m.tumorIncomplete ? '0' : m.marginMm.toFixed(1);
+    out('vessels')!.textContent = uncut ? '0' : String(m.vesselsCrossed);
+    live.dataset.state = uncut ? 'uncut' : m.tumorIncomplete ? 'through' : 'clear';
   };
 
   new ResizeObserver(() => hero.resize()).observe(canvas);
@@ -160,10 +229,14 @@ export async function mountHero(root: HTMLElement): Promise<void> {
   const loop = (now: number) => {
     requestAnimationFrame(loop);
     if (!visible) return;
-    // The one perpetual motion on the page: a slow, small turn.
-    if (!reduced && !hand?.steering) hero.yaw = VIEW_YAW + Math.sin((now - t0) * 0.00011) * 9 * DEG;
+    const steering = !!hand?.steering;
+    if (mode === 'pointer' && !steering) applyPointer();
+    // The one perpetual motion on the page: a slow, small turn, held still
+    // while something is steering the cut.
+    else if (!reduced && !steering) hero.yaw = VIEW_YAW + Math.sin((now - t0) * 0.00011) * 9 * DEG;
     hand?.tick(now);
     hero.render();
+    updateNumbers();
     if (import.meta.env.DEV && !logged && now - t0 > 4000) {
       logged = true;
       console.info('[hero] frame', hero.stats);
@@ -175,15 +248,28 @@ export async function mountHero(root: HTMLElement): Promise<void> {
   root.dataset.ready = '';
 
   // The first level is 4 mm in-plane so the page paints fast; the 2 mm level
-  // streams in behind it and replaces it in place. A failure just keeps lo.
+  // streams in behind it, replaces it in place, and feeds the live numbers.
+  // A failure keeps lo for both.
   const idle = (cb: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(cb, { timeout: 1500 }) : setTimeout(cb, 300));
+  const startPlanner = async (source: HeroData) => {
+    const { makePlanner } = await import('./planning.ts');
+    idle(() => {
+      planner = makePlanner(source);
+      if (import.meta.env.DEV) console.info(`[hero] planning grid built in ${planner.buildMs.toFixed(0)} ms`);
+      if (live) live.hidden = false;
+    });
+  };
   idle(() => {
     loadHero('/data/liver/hi/')
       .then((hi) => {
         hero.upgrade(hi);
         root.dataset.hires = '';
+        void startPlanner(hi);
       })
-      .catch((err) => console.warn('[hero] high-resolution volume unavailable', err));
+      .catch((err) => {
+        console.warn('[hero] high-resolution volume unavailable', err);
+        void startPlanner(data);
+      });
   });
 
   if (handBtn && handNote) {
@@ -193,22 +279,22 @@ export async function mountHero(root: HTMLElement): Promise<void> {
         hand.stop();
         hand = null;
         root.removeAttribute('data-hand');
-        handBtn.textContent = 'Use your hand';
+        handBtn.textContent = 'Use your webcam instead';
         applyScroll();
         return;
       }
       handBtn.disabled = true;
-      handNote.textContent = 'Starting camera. Frames stay on this device.';
+      handNote.textContent = 'Starting the camera. Video never leaves this device.';
       const { startHand } = await import('./hand.ts');
       hand = await startHand(hero, pivot);
       handBtn.disabled = false;
       if (!hand) {
-        handNote.textContent = 'No camera available. Scroll drives the cut instead.';
+        handNote.textContent = 'No camera found. The pointer still cuts.';
         return;
       }
       root.dataset.hand = '';
-      handBtn.textContent = 'Stop camera';
-      handNote.textContent = 'Hold up an open hand. Tilt it to tilt the cut.';
+      handBtn.textContent = 'Stop the camera';
+      handNote.textContent = 'Hold up an open hand, palm to the camera. Tilt it and the cut tilts.';
     });
   }
 }

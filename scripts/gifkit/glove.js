@@ -82,6 +82,8 @@ css.textContent = `
   #gifcard .v:empty { display: none; }
   #gifcard .v::before { content: '\\25B8  '; color: #8fb0cf; }
   #gifcard.voice .view { display: none; }
+  /* Voice-only clips: clear of the copilot and plan panels on the left. */
+  #gifcard.voice { top: auto; bottom: 16px; width: 270px; }
   #banner { display: none !important; }
   /* No camera in headless Chrome: the inset shows the hands instead. */
   #camwrap { display: none !important; }`;

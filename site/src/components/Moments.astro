@@ -7,7 +7,7 @@ const fmt = (v: number | null, digits = 0) => (v === null ? '—' : v.toFixed(di
 
 <section class="moments" aria-labelledby="moments-label" id="moments">
   <div class="wrap">
-    <h2 class="visually-hidden" id="moments-label">From the demo</h2>
+    <h2 class="visually-hidden" id="moments-label">Two planning tasks</h2>
   </div>
   {
     MOMENTS.map((m, i) => (
@@ -22,7 +22,6 @@ const fmt = (v: number | null, digits = 0) => (v === null ? '—' : v.toFixed(di
           <div class="screen">
             <AssetVideo
               name={m.asset}
-              caption={`Rendered by the app. ${m.title}`}
               alt={`Scrub+ running: ${m.line}`}
             />
             <dl class="hud mono" aria-label="Planning numbers">
@@ -49,7 +48,7 @@ const fmt = (v: number | null, digits = 0) => (v === null ? '—' : v.toFixed(di
                 <div class="cell verdicts">
                   <dt class="label">Verdict</dt>
                   {m.verdicts.map((v, j) => (
-                    <dd class:list={['verdict', v.tone]} data-verdict={j}>
+                    <dd class:list={['verdict', v.tone]} data-verdict={j} data-at={v.at}>
                       {v.text}
                     </dd>
                   ))}
@@ -104,6 +103,7 @@ const fmt = (v: number | null, digits = 0) => (v === null ? '—' : v.toFixed(di
     font-size: var(--fs-44);
   }
   .verdict {
+    font-family: var(--font-display);
     font-size: var(--fs-20);
     font-weight: 500;
     line-height: 1.2;

@@ -6,13 +6,14 @@ import Base from '../layouts/Base.astro';
 
 const steps = [
   ['Hold up an open hand', 'The plane follows your palm. Tilt it to tilt the cut.'],
-  ['“Scrub, place the stent”', 'The graft seats, sizes itself, and says whether it seals.'],
+  ['“Scrub, show me the tumor relative to the portal vein”', 'The view turns to the gap and the distance is drawn on it.'],
   ['“Scrub, optimize”', 'Your cut re-seats itself to clear the vessel.'],
-  ['“Show the patient”', 'The view simplifies and explains the plan in plain words.'],
+  ['“Scrub, place the stent”', 'On the aorta case: the graft seats, sizes itself, and says whether it seals.'],
+  ['“Scrub, show the patient”', 'The view simplifies and explains the plan in plain words.'],
 ];
 ---
 
-<Base title="Try Scrub+" description="Run Scrub+ in Chrome with your own webcam and voice, or locally from the repository.">
+<Base title="Try Scrub+" description="Run Scrub+ in Chrome with your own webcam and microphone.">
   <Nav />
   <main>
     <section class="section top" aria-labelledby="demo-title">
@@ -21,22 +22,29 @@ const steps = [
         <div class="run">
           {
             LINKS.app ? (
-              <p>
-                <a class="go" href={LINKS.app}>
-                  Open the app in Chrome <span aria-hidden="true">→</span>
-                </a>
-              </p>
+              <>
+                <p>
+                  <a class="go" href={LINKS.app}>
+                    Open the app in Chrome <span aria-hidden="true">→</span>
+                  </a>
+                </p>
+                <p class="body small">
+                  To keep it, press <span class="mono">Install app</span> in its top bar (or the install icon in
+                  Chrome's address bar). It then opens in its own window, and each case you have opened works
+                  offline.
+                </p>
+              </>
             ) : (
               <>
-                <p class="body">Runs locally in Chrome. Two commands from a fresh clone:</p>
+                <p class="body">Scrub+ runs locally in Chrome. From a fresh clone of the repository:</p>
                 <pre class="mono cmd"><code>npm install
 npm run dev</code></pre>
               </>
             )
           }
           <p class="body small">
-            Camera frames never leave the device. No webcam or microphone: every action has a mouse or keyboard
-            fallback.
+            Video from the webcam stays on your machine. Without a camera or microphone, every gesture has a mouse
+            equivalent and every command a key.
           </p>
         </div>
         <ol class="script">

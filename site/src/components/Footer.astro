@@ -7,12 +7,12 @@ import Wordmark from './Wordmark.astro';
   <div class="wrap grid">
     <div class="id">
       <Wordmark />
-      <p>Research and demonstration only. Not a medical device.</p>
+      <p>A research prototype built at HackNC 2026. Not a medical device.</p>
       {TEAM.length > 0 && <p>{TEAM.join(' · ')}</p>}
       <p class="links">
         {LINKS.github && <a href={LINKS.github}>GitHub</a>}
         {LINKS.devpost && <a href={LINKS.devpost}>Devpost</a>}
-        <a href="/how">How it works</a>
+        <a href="/demo">Try it</a>
       </p>
     </div>
     <div class="data">
@@ -45,8 +45,7 @@ import Wordmark from './Wordmark.astro';
   .footer {
     border-top: var(--hair);
     padding-block: var(--s-12) var(--s-8);
-    font-family: var(--font-mono);
-    font-size: var(--fs-12);
+    font-size: var(--fs-14);
     line-height: 1.6;
     color: var(--text-faint);
   }

@@ -30,16 +30,15 @@ export function initMotion(): void {
   gsap.ticker.lagSmoothing(0);
 
   playWhenVisible(desktop);
-  if (desktop) pinGestures();
-  else revealTranscript(document.querySelector('[data-transcript]'));
+  if (desktop) document.querySelectorAll<HTMLElement>('[data-stepper]').forEach(pinStepper);
   moments();
 
   addEventListener('load', () => ScrollTrigger.refresh());
 }
 
 /**
- * Loops play only while on screen. On desktop the pinned gesture sequence
- * plays its own clips one at a time, so they are left to it.
+ * Loops play only while on screen. On desktop the pinned
+ * sequences play their own clips one at a time, so they are left to them.
  */
 function playWhenVisible(desktop: boolean): void {
   const io = new IntersectionObserver((entries) => {
@@ -50,52 +49,47 @@ function playWhenVisible(desktop: boolean): void {
     }
   });
   document.querySelectorAll<HTMLVideoElement>('video[data-autoplay]').forEach((v) => {
-    if (desktop && v.closest('[data-gestures]')) return;
+    if (desktop && v.closest('[data-stepper]')) return;
     io.observe(v);
   });
 }
 
-function revealTranscript(el: Element | null): void {
-  if (!el) return;
-  ScrollTrigger.create({ trigger: el, start: 'top 85%', once: true, onEnter: () => el.classList.add('in') });
-}
-
-/** One gesture per scroll step, pinned. */
-function pinGestures(): void {
-  const root = document.querySelector<HTMLElement>('[data-gestures]');
-  if (!root) return;
+/** One item per scroll step, pinned (gestures, voice copilot). */
+function pinStepper(root: HTMLElement): void {
   root.dataset.pinned = '';
   const steps = [...root.querySelectorAll<HTMLElement>('[data-step]')];
   const frames = [...root.querySelectorAll<HTMLElement>('[data-frame]')];
-  const transcript = root.querySelector('[data-transcript]');
   let current = -1;
+  // Only the sequence on screen decodes video; the other one stays paused.
+  let visible = false;
+
+  const sync = () =>
+    frames.forEach((f, j) => {
+      const v = f.querySelector('video');
+      if (!v) return;
+      if (visible && j === current) void v.play().catch(() => {});
+      else v.pause();
+    });
 
   const show = (i: number) => {
     if (i === current) return;
     current = i;
     steps.forEach((s, j) => (j === i ? s.setAttribute('aria-current', 'step') : s.removeAttribute('aria-current')));
-    frames.forEach((f, j) => {
-      f.classList.toggle('on', j === i);
-      const v = f.querySelector('video');
-      if (!v) return;
-      if (j === i) void v.play().catch(() => {});
-      else v.pause();
-    });
+    frames.forEach((f, j) => f.classList.toggle('on', j === i));
+    sync();
   };
   show(0);
+  new IntersectionObserver(([e]) => {
+    visible = e.isIntersecting;
+    sync();
+  }).observe(root);
 
   ScrollTrigger.create({
     trigger: root,
     start: 'top top',
     end: `+=${steps.length * 80}%`,
     pin: true,
-    onUpdate: (st) => {
-      // The last 15 % of the pin holds the final gesture while the
-      // transcript line arrives.
-      const p = Math.min(0.999, st.progress / 0.85);
-      show(Math.floor(p * steps.length));
-      if (st.progress > 0.85) transcript?.classList.add('in');
-    },
+    onUpdate: (st) => show(Math.min(steps.length - 1, Math.floor(st.progress * steps.length))),
   });
 }
 
@@ -121,7 +115,11 @@ function moments(): void {
         const n = el.querySelector('.n');
         if (n) n.textContent = (from + (to - from) * k).toFixed(Number(el.dataset.digits ?? 0));
       }
-      const idx = Math.min(verdictEls.length - 1, Math.floor(p * verdictEls.length));
+      // Each verdict shows from the point in the clip where the app says it.
+      let idx = 0;
+      verdictEls.forEach((v, j) => {
+        if (p >= Number(v.dataset.at ?? 0)) idx = j;
+      });
       verdictEls.forEach((v, j) => v.classList.toggle('on', j === idx));
     };
     apply(0);

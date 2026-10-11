@@ -1,4 +1,5 @@
 ---
+import { LINKS } from '../data/content.ts';
 import Wordmark from './Wordmark.astro';
 ---
 
@@ -7,8 +8,8 @@ import Wordmark from './Wordmark.astro';
     <a href="/" class="home" aria-label="Scrub+ home"><Wordmark /></a>
     <nav aria-label="Primary">
       <ul>
-        <li><a href="/demo">Demo</a></li>
-        <li><a href="/how">How it works</a></li>
+        <li><a href="/demo">Try it</a></li>
+        {LINKS.github && <li><a href={LINKS.github}>GitHub</a></li>}
       </ul>
     </nav>
   </div>
