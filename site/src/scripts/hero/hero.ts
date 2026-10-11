@@ -104,7 +104,7 @@ export async function mountHero(root: HTMLElement): Promise<void> {
     ScrollTrigger.create({
       trigger: root,
       start: 'top top',
-      end: '+=200%',
+      end: '+=110%',
       pin: true,
       scrub: true,
       refreshPriority: 1,

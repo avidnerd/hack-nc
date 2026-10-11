@@ -12,19 +12,32 @@ import Lenis from 'lenis';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const ease = gsap.parseEase('0.65, 0, 0.35, 1') ?? ((t: number) => t);
+/**
+ * The clips are recorded at a deliberate pace; on the page they play faster
+ * so a scroll step never waits on them. The glove motions read best at 1.75x,
+ * the copilot's camera moves at 1.4x.
+ */
+const RATE = { stepper: 1.75, copilot: 1.4 };
+function setRates(): void {
+  const apply = (sel: string, rate: number) =>
+    document.querySelectorAll<HTMLVideoElement>(`${sel} video`).forEach((v) => {
+      v.defaultPlaybackRate = rate;
+      v.playbackRate = rate;
+      v.addEventListener('play', () => (v.playbackRate = rate));
+    });
+  apply('[data-stepper]', RATE.stepper);
+  apply('[data-copilot]', RATE.copilot);
+}
 
 export function initMotion(): void {
+  setRates();
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const desktop = matchMedia('(min-width: 1024px)').matches;
 
-  if (reduced) {
-    finalFrames();
-    return;
-  }
+  if (reduced) return;
   document.documentElement.classList.add('motion');
 
-  const lenis = new Lenis({ lerp: 0.12 });
+  const lenis = new Lenis({ lerp: 0.2 });
   lenis.on('scroll', ScrollTrigger.update);
   gsap.ticker.add((t) => lenis.raf(t * 1000));
   gsap.ticker.lagSmoothing(0);
@@ -34,7 +47,6 @@ export function initMotion(): void {
     document.querySelectorAll<HTMLElement>('[data-stepper]').forEach(pinStepper);
     document.querySelectorAll<HTMLElement>('[data-copilot]').forEach(pinCopilot);
   }
-  moments();
 
   addEventListener('load', () => ScrollTrigger.refresh());
 }
@@ -90,7 +102,7 @@ function pinStepper(root: HTMLElement): void {
   ScrollTrigger.create({
     trigger: root,
     start: 'top top',
-    end: `+=${steps.length * 80}%`,
+    end: `+=${steps.length * 45}%`,
     pin: true,
     onUpdate: (st) => show(Math.min(steps.length - 1, Math.floor(st.progress * steps.length))),
   });
@@ -161,69 +173,9 @@ function pinCopilot(root: HTMLElement): void {
   ScrollTrigger.create({
     trigger: root,
     start: 'top top',
-    end: `+=${steps.length * 100}%`,
+    end: `+=${steps.length * 60}%`,
     pin: true,
     onUpdate: (st) => show(Math.min(steps.length - 1, Math.floor(st.progress * steps.length))),
   });
 }
 
-/**
- * Each moment: the clip loops while on screen and the HUD numbers follow its
- * playback position, moving from their before value to their after value over
- * the middle of the take. Reading currentTime is free; seeking a 1920 px VP9
- * clip on every scroll tick is not, so nothing here ever seeks.
- */
-function moments(): void {
-  document.querySelectorAll<HTMLElement>('[data-moment]').forEach((m) => {
-    const video = m.querySelector<HTMLVideoElement>('video');
-    const nums = [...m.querySelectorAll<HTMLElement>('.v[data-from][data-to]')];
-    const verdicts = m.querySelector<HTMLElement>('.verdicts');
-    const verdictEls = [...m.querySelectorAll<HTMLElement>('[data-verdict]')];
-    if (verdicts) verdicts.dataset.live = '';
-
-    const apply = (p: number) => {
-      const k = ease(Math.min(1, Math.max(0, (p - 0.3) / 0.4)));
-      for (const el of nums) {
-        const from = Number(el.dataset.from);
-        const to = Number(el.dataset.to);
-        const n = el.querySelector('.n');
-        if (n) n.textContent = (from + (to - from) * k).toFixed(Number(el.dataset.digits ?? 0));
-      }
-      // Each verdict shows from the point in the clip where the app says it.
-      let idx = 0;
-      verdictEls.forEach((v, j) => {
-        if (p >= Number(v.dataset.at ?? 0)) idx = j;
-      });
-      verdictEls.forEach((v, j) => v.classList.toggle('on', j === idx));
-    };
-    apply(0);
-
-    if (video) {
-      const follow = () => {
-        if (video.paused) return;
-        if (video.duration) apply(video.currentTime / video.duration);
-        requestAnimationFrame(follow);
-      };
-      video.addEventListener('play', follow);
-    } else {
-      // No clip yet: the numbers play once when the section arrives.
-      ScrollTrigger.create({
-        trigger: m,
-        start: 'top 70%',
-        once: true,
-        onEnter: () => {
-          const o = { p: 0 };
-          gsap.to(o, { p: 1, duration: 2.4, ease: 'none', onUpdate: () => apply(o.p) });
-        },
-      });
-    }
-  });
-}
-
-/** Reduced motion: every sequence at its end state, nothing animates. */
-function finalFrames(): void {
-  document.querySelectorAll<HTMLElement>('.v[data-from][data-to]').forEach((el) => {
-    const n = el.querySelector('.n');
-    if (n) n.textContent = Number(el.dataset.to).toFixed(Number(el.dataset.digits ?? 0));
-  });
-}

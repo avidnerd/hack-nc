@@ -6,7 +6,7 @@ import { LINKS } from '../data/content.ts';
 
 const mobileFile = 'hero-mobile.mp4';
 const hasMobile = existsSync(fileURLToPath(new URL(`../../public/video/${mobileFile}`, import.meta.url)));
-const demoHref = LINKS.video ?? '#moments';
+const demoHref = LINKS.video;
 const appHref = LINKS.app ?? '/demo';
 ---
 
@@ -40,7 +40,7 @@ const appHref = LINKS.app ?? '/demo';
       <p class="sub">Surgical planning on a real CT, by hand and voice.</p>
       <p class="links">
         <a href={appHref}>Try it live <span aria-hidden="true">→</span></a>
-        <a href={demoHref}>Watch the 90-second demo</a>
+        {demoHref && <a href={demoHref}>Watch the 90-second demo</a>}
       </p>
     </div>
     <div class="hand">
