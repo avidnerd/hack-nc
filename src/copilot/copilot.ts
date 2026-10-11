@@ -30,7 +30,7 @@ import { patch, say, set, state, toast } from '../state.ts';
 import type { CameraState } from '../state.ts';
 import type { CardContent } from '../ui/infoCard.ts';
 import type { Plane, PresetName, StentState, Vec3 } from '../types.ts';
-import { frameView, sectionFacing, type View } from './navigation.ts';
+import { frameView, sectionFacing, sectionThrough, type View } from './navigation.ts';
 import { PlanStore, comparePlans, comparisonSentence, snapshot, type PlanSnapshot } from './plans.ts';
 
 export interface CopilotDeps {
@@ -139,6 +139,27 @@ export class Copilot {
     }, 30);
   }
 
+  /**
+   * Put a viewing section on the cutting plane (unless the surgeon locked a
+   * resection plane there: that is theirs, we only move the camera).
+   */
+  private openSection(plane: Plane): void {
+    if (state.plane.locked) return;
+    this.section = plane;
+    patch('plane', { n: plane.n, d: plane.d, on: true });
+    set('viewSection', true);
+  }
+
+  /**
+   * Without surface meshes (an uploaded scan) the anatomy is drawn by the CT
+   * ray-marcher, so a framed structure sits inside the volume and the camera
+   * would look at it through everything in front. A section through it
+   * shows the CT slice there instead.
+   */
+  private get volumeOnly(): boolean {
+    return !state.data?.meshes;
+  }
+
   private showRelationship(aIds: number[], bIds: number[], r: StructureDistance, label: string, extra: Vec3[]): View | null {
     this.reveal([...aIds, ...bIds]);
     set('focus', [...aIds, ...bIds]);
@@ -146,6 +167,7 @@ export class Copilot {
     const sideOn: Vec3 = [r.b[0] - r.a[0], r.b[1] - r.a[1], r.b[2] - r.a[2]];
     const v = this.view([r.a, r.b, ...extra], Math.hypot(...sideOn) > 0.5 ? sideOn : undefined);
     if (v) this.deps.tweenCamera(v, 650);
+    if (v && this.volumeOnly) this.openSection(sectionFacing(r.a, r.b, v));
     this.deps.noteMeasured();
     return v;
   }
@@ -240,12 +262,7 @@ export class Copilot {
       const v = this.showRelationship(aIds, [best.id], best, label, box);
       // A CT section through the gap, facing the camera, unless the surgeon
       // has locked a resection plane (that is theirs; we only move the camera).
-      if (v && !state.plane.locked) {
-        const sec = sectionFacing(best.a, best.b, v);
-        this.section = sec;
-        patch('plane', { n: sec.n, d: sec.d, on: true });
-        set('viewSection', true);
-      }
+      if (v) this.openSection(sectionFacing(best.a, best.b, v));
       this.deps.showCard({
         kicker: 'Closest vessel',
         title: label,
@@ -279,8 +296,13 @@ export class Copilot {
     this.run(`Focusing on the ${n}…`, () => {
       this.reveal(ids);
       set('focus', ids);
-      const v = this.view(this.corners(ids));
+      const box = this.corners(ids);
+      const v = this.view(box);
       if (v) this.deps.tweenCamera(v, 650);
+      if (v && this.volumeOnly && box.length === 2) {
+        const c: Vec3 = [(box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2, (box[0][2] + box[1][2]) / 2];
+        this.openSection(sectionThrough(c, v));
+      }
       say(`${cap(n)}.`);
     });
   }

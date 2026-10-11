@@ -1,5 +1,6 @@
 node_modules/
 dist/
+web-dist/
 .vite/
 *.local
 .env
@@ -22,3 +23,5 @@ public/mediapipe/
 # Local agent notes and a large source asset, kept out of the repo on purpose
 CLAUDE.md
 realistic_surgical_glove_with_folds_texture.zip
+
+.vercel

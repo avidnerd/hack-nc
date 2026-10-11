@@ -9,6 +9,9 @@
       content="A webcam-driven, voice-first 3D surgical planning console that runs entirely in the browser."
     />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2306080c'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='%2358e5c8' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="theme-color" content="#0e0f11" />
     <link rel="stylesheet" href="/src/ui/styles.css" />
   </head>
   <body>
@@ -32,6 +35,7 @@
         <span class="mode-badge" id="mode-badge">Surgeon</span>
       </div>
       <div class="tb-right">
+        <button class="install-btn" id="install" type="button" hidden>Install app</button>
         <div class="status" id="hand-status" title="Hand tracking">
           <svg viewBox="0 0 24 24" class="icon" aria-hidden="true">
             <path

@@ -3,8 +3,8 @@
  *
  * Order of preference for each line:
  *   1. a pre-rendered clip listed in public/audio/manifest.json (offline,
- *      instant; produced by scripts/render-phrases.mjs when an ElevenLabs key
- *      is available)
+ *      instant). The file maps a phrase to a clip path; it ships empty, so
+ *      the browser voice speaks unless clips are added there
  *   2. ElevenLabs streaming TTS when VITE_ELEVENLABS_KEY is set
  *   3. the browser's speechSynthesis
  * A new line always interrupts the previous one: a stale sentence finishing
