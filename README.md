@@ -1,4 +1,4 @@
-# Scrub
+# Scrub+
 
 ![Scrub showing a gesture-controlled cut through a liver CT](docs/shots/live-cut.png)
 
