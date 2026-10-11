@@ -218,7 +218,22 @@ export async function mountHero(root: HTMLElement): Promise<void> {
     live.dataset.state = uncut ? 'uncut' : m.tumorIncomplete ? 'through' : 'clear';
   };
 
-  new ResizeObserver(() => hero.resize()).observe(canvas);
+  // Line the torso up with the copy: its centre sits level with the middle of
+  // the headline block, whatever the window size.
+  const text = root.querySelector<HTMLElement>('.text');
+  const align = () => {
+    if (text) {
+      const c = canvas.getBoundingClientRect();
+      const t = text.getBoundingClientRect();
+      hero.shiftY = t.top + t.height / 2 - (c.top + c.height / 2);
+      // The lamp's pool of light follows the torso.
+      root.style.setProperty('--lamp-y', `${(((c.height / 2 + hero.shiftY) / c.height) * 100).toFixed(1)}%`);
+    }
+    hero.resize();
+  };
+  align();
+  new ResizeObserver(align).observe(canvas);
+  if (text) new ResizeObserver(align).observe(text);
 
   // Render only while the hero is on screen.
   let visible = true;

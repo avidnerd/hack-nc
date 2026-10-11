@@ -36,13 +36,17 @@ const appHref = LINKS.app ?? '/demo';
   <div class="wrap grid copy">
     <div class="text">
       <p class="label">HackNC 2026 · Touchless surgical planning</p>
-      <h1 class="display" id="hero-title">Transforming human–computer interaction for surgeons.</h1>
+      <h1 class="display" id="hero-title">Transforming <span class="nowrap">human–computer</span> interaction for surgeons.</h1>
       <p class="sub">Surgical planning on a real CT, by hand and voice.</p>
       <p class="links">
         <a href={appHref}>Try it live <span aria-hidden="true">→</span></a>
         {demoHref && <a href={demoHref}>Watch the 90-second demo</a>}
       </p>
     </div>
+  </div>
+
+  <!-- Top right, clear of the torso, which sits level with the copy. -->
+  <div class="wrap side">
     <div class="hand">
       <div class="live" data-hero-live hidden aria-live="off">
         <p class="live-hint">Move the pointer to cut.</p>
@@ -82,7 +86,7 @@ const appHref = LINKS.app ?? '/demo';
        surgical lamp. Centred where the renderer draws the body (its view is
        shifted 27 % right), and the only gradient on the page besides the
        falloff into the copy below. */
-    background: radial-gradient(ellipse 40% 56% at 75% 44%, var(--lamp) 0%, var(--bg-raise) 48%, var(--bg) 100%);
+    background: radial-gradient(ellipse 40% 56% at 75% var(--lamp-y, 44%), var(--lamp) 0%, var(--bg-raise) 48%, var(--bg) 100%);
   }
 
   .canvas,
@@ -146,6 +150,9 @@ const appHref = LINKS.app ?? '/demo';
   }
   /* A sentence, not a slogan: set a step below the display size so it holds
      its lines at laptop heights, clear of the torso. */
+  .nowrap {
+    white-space: nowrap;
+  }
   .display {
     font-size: clamp(2.5rem, 1rem + 4.3vw, 4.9rem);
     max-width: 15ch;
@@ -173,12 +180,20 @@ const appHref = LINKS.app ?? '/demo';
     text-decoration-color: currentColor;
   }
 
+  .side {
+    position: absolute;
+    inset: clamp(5rem, 12vh, 8rem) 0 auto 0;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
   .hand {
-    grid-column: 9 / span 4;
-    justify-self: end;
+    width: min(100%, 22rem);
     text-align: right;
     display: grid;
     gap: var(--s-1);
+    pointer-events: auto;
   }
   .hand-btn {
     justify-self: end;
@@ -256,7 +271,7 @@ const appHref = LINKS.app ?? '/demo';
 
   .cam {
     position: absolute;
-    top: 5rem;
+    bottom: 2rem;
     right: var(--edge);
     width: 160px;
     aspect-ratio: 4 / 3;
