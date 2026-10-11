@@ -49,45 +49,6 @@ export const GESTURES = [
   },
 ] as const;
 
-export interface HudValue {
-  label: string;
-  from: number | null;
-  to: number | null;
-  unit: string;
-  digits?: number;
-}
-
-/**
- * Optimize numbers are what the app shows in docs/video/optimize.webm (the
- * Moment 3 cut on the current liver data). Verdict `at` is the fraction of
- * docs/video/stent.webm at which the app announces it.
- */
-export const MOMENTS = [
-  {
-    key: 'stent',
-    title: 'Place a stent graft',
-    line: '“Scrub, place the stent.” It sizes itself and says whether it seals. Too high, and it covers the kidneys’ arteries.',
-    asset: 'stent',
-    hud: [] as HudValue[],
-    verdicts: [
-      { text: 'Seals', tone: 'accent', at: 0.1 },
-      { text: 'Won’t seal: renal arteries covered', tone: 'danger', at: 0.66 },
-    ],
-  },
-  {
-    key: 'optimize',
-    title: 'Optimize the cut',
-    line: '“Scrub, optimize.” Out of 3,751 nearby planes it picks the closest one that clears the tumour and spares the vessels.',
-    asset: 'optimize',
-    hud: [
-      { label: 'Margin', from: 6.3, to: 10.2, unit: 'mm', digits: 1 },
-      { label: 'Vessels cut', from: 2, to: 0, unit: '' },
-      { label: 'Liver kept', from: 74, to: 72, unit: '%' },
-    ] as HudValue[],
-    verdicts: [] as { text: string; tone: string; at: number }[],
-  },
-];
-
 /**
  * The voice copilot (README "the copilot", "smart measurement", "measure,
  * suggest, outcomes"). `say` is the phrase after the wake word; each clip in
