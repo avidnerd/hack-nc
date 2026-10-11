@@ -16,7 +16,7 @@ Reply with ONE JSON object and nothing else. Allowed objects:
 {"kind":"show","structure":"tumor"|"liver"|"vessels"|"portal_vein"|"hepatic_vessels"|"aorta"|"kidneys"|"all","on":true|false}
 {"kind":"placeStent"}
 {"kind":"removeDevice"}
-{"kind":"optimize"}
+{"kind":"optimize","marginMm"?:number,"remnantPct"?:number}   (include a limit only if one was spoken)
 {"kind":"measure","what":"tumor"|"neck"|"liver"|"aorta"|"kidneys"|"kidney_left"|"kidney_right"|"portal_vein"|"ivc"}
 {"kind":"suggest"}
 {"kind":"outcomes"}
@@ -72,7 +72,6 @@ export function validate(o: Record<string, unknown>): Intent | null {
     }
     case 'placeStent':
     case 'removeDevice':
-    case 'optimize':
     case 'reset':
     case 'writePlan':
     case 'suggest':
@@ -115,6 +114,15 @@ export function validate(o: Record<string, unknown>): Intent | null {
     case 'plane': {
       const on = bool(o.on);
       return on === null ? null : { kind: o.kind, on };
+    }
+    case 'optimize': {
+      const marginMm = num(o.marginMm);
+      const remnantPct = num(o.remnantPct);
+      return {
+        kind: 'optimize',
+        ...(marginMm !== null && marginMm > 0 ? { marginMm } : {}),
+        ...(remnantPct !== null && remnantPct > 0 && remnantPct < 100 ? { remnantPct } : {}),
+      };
     }
     case 'mode':
       return o.mode === 'surgeon' || o.mode === 'patient' ? { kind: 'mode', mode: o.mode } : null;

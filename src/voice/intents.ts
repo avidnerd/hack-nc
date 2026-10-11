@@ -14,7 +14,8 @@ export type Intent =
   | { kind: 'show'; structure: string; on: boolean }
   | { kind: 'placeStent' }
   | { kind: 'removeDevice' }
-  | { kind: 'optimize' }
+  /** Optional limits spoken with the request ("optimize with a 30 mm margin") become the thresholds. */
+  | { kind: 'optimize'; marginMm?: number; remnantPct?: number }
   | { kind: 'measure'; what: string }
   | { kind: 'suggest' }
   | { kind: 'outcomes' }
@@ -187,6 +188,12 @@ function lengthMm(s: string): number | null {
   return /^c/.test(m[2]) ? n * 10 : n;
 }
 
+/** The first number spoken after `word` ("margin of 30" -> 30). */
+function numberAfter(s: string, word: string): number | null {
+  const i = s.indexOf(word);
+  return i < 0 ? null : parseNumber(s.slice(i + word.length));
+}
+
 /* ------------------------------------------------------------------ grammar */
 
 /**
@@ -294,7 +301,16 @@ export function parseIntent(text: string): Intent | null {
 
   /* --- optimizer --------------------------------------------------------- */
   if (/\b(optimi[sz]e|fix|improve|better|correct|re-?plan|replan)\b/.test(s)) {
-    return { kind: 'optimize' };
+    const opt: Intent = { kind: 'optimize' };
+    if (/\bmargin\b/.test(s)) {
+      const mm = lengthMm(s) ?? numberAfter(s, 'margin');
+      if (mm !== null) opt.marginMm = mm;
+    }
+    if (/\b(remnant|remaining|left)\b/.test(s)) {
+      const pct = /(\d+(?:\.\d+)?)\s*(?:%|percent)/.exec(s);
+      if (pct) opt.remnantPct = parseFloat(pct[1]);
+    }
+    return opt;
   }
 
   /* --- plan note --------------------------------------------------------- */

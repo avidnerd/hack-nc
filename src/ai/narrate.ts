@@ -39,7 +39,7 @@ export function optimizeReason(res: OptimizeResult, before: PlanMetrics, after: 
   else why = 'to meet your constraints';
 
   const numbers = `Margin ${r0(after.marginMm)} millimeters, remnant ${r0(after.remnantPct)} percent.`;
-  if (!res.feasible) return `${how} ${why}, but ${constraintFailure(after, th).toLowerCase()} ${numbers}`;
+  if (!res.feasible) return `${how} ${why}, but ${lowerFirst(constraintFailure(after, th))} ${numbers}`;
   return `Optimized. ${how} ${why}. ${numbers}`;
 }
 
@@ -233,4 +233,9 @@ export function planMarkdown(f: PlanFacts): string {
   if (!(f.plane.on && f.metrics) && !f.stent) L.push('_No plane or device placed yet._', '');
   L.push(`## Limitations`, '', LIMITATIONS, '');
   return L.join('\n');
+}
+
+/** Lower-case only the first letter, so "I" and names inside stay as written. */
+function lowerFirst(s: string): string {
+  return s.charAt(0).toLowerCase() + s.slice(1);
 }
