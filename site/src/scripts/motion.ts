@@ -30,7 +30,10 @@ export function initMotion(): void {
   gsap.ticker.lagSmoothing(0);
 
   playWhenVisible(desktop);
-  if (desktop) document.querySelectorAll<HTMLElement>('[data-stepper]').forEach(pinStepper);
+  if (desktop) {
+    document.querySelectorAll<HTMLElement>('[data-stepper]').forEach(pinStepper);
+    document.querySelectorAll<HTMLElement>('[data-copilot]').forEach(pinCopilot);
+  }
   moments();
 
   addEventListener('load', () => ScrollTrigger.refresh());
@@ -49,7 +52,7 @@ function playWhenVisible(desktop: boolean): void {
     }
   });
   document.querySelectorAll<HTMLVideoElement>('video[data-autoplay]').forEach((v) => {
-    if (desktop && v.closest('[data-stepper]')) return;
+    if (desktop && v.closest('[data-stepper], [data-copilot]')) return;
     io.observe(v);
   });
 }
@@ -88,6 +91,77 @@ function pinStepper(root: HTMLElement): void {
     trigger: root,
     start: 'top top',
     end: `+=${steps.length * 80}%`,
+    pin: true,
+    onUpdate: (st) => show(Math.min(steps.length - 1, Math.floor(st.progress * steps.length))),
+  });
+}
+
+/**
+ * The copilot stage, pinned: each scroll step types a command, plays the app's
+ * response once from the start, and pins the annotation when the measurement
+ * appears in the clip (data-at, recorded by the capture script).
+ */
+function pinCopilot(root: HTMLElement): void {
+  root.dataset.pinned = '';
+  const steps = [...root.querySelectorAll<HTMLElement>('[data-cstep]')];
+  const count = root.querySelector<HTMLElement>('[data-ccount]');
+  let current = -1;
+  let visible = false;
+  let watching = 0;
+
+  const watch = (step: HTMLElement, v: HTMLVideoElement) => {
+    cancelAnimationFrame(watching);
+    const at = Number(step.dataset.at ?? 0.4);
+    const tick = () => {
+      if (v.duration && v.currentTime / v.duration >= at) step.classList.add('landed');
+      else watching = requestAnimationFrame(tick);
+    };
+    watching = requestAnimationFrame(tick);
+  };
+
+  const start = (i: number) => {
+    const step = steps[i];
+    const v = step.querySelector('video');
+    step.classList.remove('typed', 'landed');
+    void step.offsetWidth; // restart the typing transition
+    step.classList.add('typed');
+    if (!v) {
+      step.classList.add('landed');
+      return;
+    }
+    v.loop = false;
+    v.currentTime = 0;
+    if (visible) void v.play().catch(() => {});
+    watch(step, v);
+  };
+
+  const show = (i: number) => {
+    if (i === current) return;
+    current = i;
+    steps.forEach((s, j) => {
+      if (j === i) s.setAttribute('aria-current', 'step');
+      else {
+        s.removeAttribute('aria-current');
+        s.querySelector('video')?.pause();
+      }
+    });
+    if (count) count.textContent = String(i + 1);
+    start(i);
+  };
+  show(0);
+  new IntersectionObserver(([e]) => {
+    const was = visible;
+    visible = e.isIntersecting;
+    const v = steps[current]?.querySelector('video');
+    if (!v) return;
+    if (visible && !was) start(current);
+    else if (!visible) v.pause();
+  }).observe(root);
+
+  ScrollTrigger.create({
+    trigger: root,
+    start: 'top top',
+    end: `+=${steps.length * 100}%`,
     pin: true,
     onUpdate: (st) => show(Math.min(steps.length - 1, Math.floor(st.progress * steps.length))),
   });
