@@ -30,11 +30,11 @@ export function llmName(): string {
   return provider();
 }
 
-export async function complete(system: string, user: string): Promise<string | null> {
+export async function complete(system: string, user: string, timeoutMs = TIMEOUT_MS): Promise<string | null> {
   const p = provider();
   if (p === 'off') return null;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const t0 = performance.now();
   try {
     const text =

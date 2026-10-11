@@ -6,52 +6,159 @@
  * (patient narration, plan prose), and the system prompt forbids new claims.
  */
 
-import { CONE_DEG, type OptimizeResult } from '../planning/optimize.ts';
-import type { PlanMetrics, StentState, Thresholds } from '../types.ts';
+import { CONE_DEG, OFFSET_MM, type OptimizeResult } from '../planning/optimize.ts';
+import type { OptimizePriority, PlanMetrics, StentState, Thresholds } from '../types.ts';
 import { complete, llmEnabled } from './llm.ts';
 
 const r0 = (x: number) => Math.round(x);
 
 /* -------------------------------------------------------------- optimizer */
 
-export function optimizeReason(res: OptimizeResult, before: PlanMetrics, after: PlanMetrics, th: Thresholds): string {
-  const moved = res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
-  if (!moved) {
-    return res.feasible
-      ? `Already optimal. Margin ${r0(after.marginMm)} millimeters, remnant ${r0(after.remnantPct)} percent.`
-      : `No better cut within ${CONE_DEG} degrees. ${constraintFailure(after, th)}`;
-  }
-
-  const how =
-    res.angleDeg >= 1
-      ? `Moved ${r0(res.angleDeg)} degrees`
-      : `Moved ${r0(res.offsetMm)} millimeters`;
-  let why: string;
-  if (res.vessel && before.vesselsCrossed > after.vesselsCrossed) {
-    why =
-      after.vesselsCrossed === 0
-        ? `to clear the ${res.vessel.toLowerCase()}`
-        : `to cross fewer vessels, ${before.vesselsCrossed} down to ${after.vesselsCrossed}`;
-  }
-  else if (before.tumorIncomplete) why = 'to take the whole tumor';
-  else if (before.marginMm < th.marginMin && after.marginMm > before.marginMm) why = 'to widen the margin';
-  else if (after.remnantPct > before.remnantPct) why = 'to spare more liver';
-  else why = 'to meet your constraints';
-
-  const numbers = `Margin ${r0(after.marginMm)} millimeters, remnant ${r0(after.remnantPct)} percent.`;
-  if (!res.feasible) return `${how} ${why}, but ${lowerFirst(constraintFailure(after, th))} ${numbers}`;
-  return `Optimized. ${how} ${why}. ${numbers}`;
+export interface ReplyOptions {
+  /** A what-if: the answer is outlined, not applied. */
+  preview?: boolean;
+  priority?: OptimizePriority;
+  /** How the question was framed, for a preview's opening ("With a 20 millimeter margin"). */
+  ask?: string;
 }
 
-function constraintFailure(m: PlanMetrics, th: Thresholds): string {
-  if (m.tumorIncomplete) return 'Tumor is still not fully resected.';
-  if (m.marginMm < th.marginMin) return `Margin is under ${th.marginMin} millimeters.`;
-  if (m.remnantPct < th.remnantMin) return `Remnant is under ${th.remnantMin} percent.`;
-  if (m.vesselsCrossed > 0) {
-    const v = m.vesselsCrossed;
-    return `It still crosses ${v} vessel${v > 1 ? 's' : ''}: I found no cut within ${CONE_DEG} degrees that keeps your margin and remnant and avoids ${v > 1 ? 'them' : 'it'}.`;
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+/** "an 8", "an 11", "a 10": the article as the number is spoken. */
+const aN = (n: number) => (/^(8|11|18)/.test(String(n)) ? `an ${n}` : `a ${n}`);
+
+/** "margin 8 to 12 millimeters, remnant 63 percent, no vessels crossed" */
+export function changeLine(before: PlanMetrics, after: PlanMetrics): string {
+  const parts: string[] = [];
+  if (after.tumorIncomplete) parts.push('tumor not fully removed');
+  else {
+    const b = r0(before.marginMm);
+    const a = r0(after.marginMm);
+    parts.push(before.tumorIncomplete || b === a ? `margin ${a} millimeters` : `margin ${b} to ${a} millimeters`);
   }
-  return 'Every constraint is met.';
+  const rb = r0(before.remnantPct);
+  const ra = r0(after.remnantPct);
+  parts.push(rb === ra ? `remnant ${ra} percent` : `remnant ${rb} to ${ra} percent`);
+  const vb = before.vesselsCrossed;
+  const va = after.vesselsCrossed;
+  if (vb !== va) parts.push(`vessels crossed ${vb} to ${va}`);
+  else parts.push(va === 0 ? 'no vessels crossed' : `crosses ${plural(va, 'vessel')}`);
+  return parts.join(', ');
+}
+
+function vesselPhrase(m: PlanMetrics): string {
+  const name = m.vesselName?.toLowerCase();
+  if (!name) return plural(m.vesselsCrossed, 'vessel');
+  return m.vesselsCrossed > 1 ? `the ${name} and ${plural(m.vesselsCrossed - 1, 'other vessel')}` : `the ${name}`;
+}
+
+/** What the result still misses, in one or two short sentences ('' when nothing). */
+function shortfall(before: PlanMetrics, after: PlanMetrics, th: Thresholds, priority: OptimizePriority): string {
+  if (after.tumorIncomplete) return 'Part of the tumor is still on the side that stays.';
+  const out: string[] = [];
+  if (after.marginMm < th.marginMin) {
+    out.push(
+      priority === 'vessels' && after.vesselsCrossed < before.vesselsCrossed
+        ? `To spare the vessels the margin drops under ${th.marginMin} millimeters.`
+        : `The margin is still under ${th.marginMin} millimeters.`,
+    );
+  }
+  if (after.remnantPct < th.remnantMin) out.push(`The remnant is under ${th.remnantMin} percent.`);
+  if (after.vesselsCrossed > 0) {
+    out.push(
+      priority === 'vessels'
+        ? `It still crosses ${vesselPhrase(after)}: no cut within ${CONE_DEG} degrees avoids it without leaving tumor or going under your remnant.`
+        : `It still crosses ${vesselPhrase(after)}; avoiding it costs margin. Say "spare the vessels" to trade margin for it.`,
+    );
+  }
+  return out.join(' ');
+}
+
+function motive(before: PlanMetrics, after: PlanMetrics, th: Thresholds, res: OptimizeResult): string {
+  if (before.tumorIncomplete && !after.tumorIncomplete) return 'to take the whole tumor';
+  if (after.vesselsCrossed < before.vesselsCrossed) {
+    return after.vesselsCrossed === 0 && res.vessel ? `to clear the ${res.vessel.toLowerCase()}` : 'to cross fewer vessels';
+  }
+  if (before.marginMm < th.marginMin && after.marginMm > before.marginMm) return 'to widen the margin';
+  if (after.remnantPct > before.remnantPct + 0.5) return 'to keep more liver';
+  if (after.marginMm > before.marginMm + 0.5) return 'to widen the margin';
+  return 'to meet your targets';
+}
+
+/**
+ * The optimizer's spoken answer: what moved and why, the numbers before and
+ * after, and what is still missed. Every number comes from the metrics.
+ */
+export function optimizeReason(
+  res: OptimizeResult,
+  before: PlanMetrics,
+  after: PlanMetrics,
+  th: Thresholds,
+  o: ReplyOptions = {},
+): string {
+  const priority = o.priority ?? 'balanced';
+  const moved = res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
+  const left = shortfall(before, after, th, priority);
+  const met = left === '';
+  const how = res.angleDeg >= 1 ? `${r0(res.angleDeg)} degrees` : `${Math.max(1, r0(res.offsetMm))} millimeters`;
+
+  if (o.preview) {
+    const head = o.ask ?? 'Searching near your cut';
+    if (!moved) return `${head}, nothing within ${CONE_DEG} degrees beats your cut. ${cap(changeLine(after, after))}.${left ? ' ' + left : ''}`;
+    return (
+      `${head}, the best cut is ${how} from yours: ${changeLine(before, after)}.` +
+      `${left ? ' ' + left : ' Every target is met.'} It's outlined; say "do it" to use it.`
+    );
+  }
+  if (!moved) {
+    return met
+      ? `Your cut already meets every target: ${changeLine(after, after)}.`
+      : `Your cut is already the best within ${CONE_DEG} degrees. ${left}`;
+  }
+  return `${met ? 'Optimized: moved' : 'Moved'} ${how} ${motive(before, after, th, res)}. ${cap(changeLine(before, after))}.${left ? ' ' + left : ''}`;
+}
+
+/** The answer to "why": what was wrong, what the search weighs, what it found. */
+export function optimizeExplanation(res: OptimizeResult, th: Thresholds, priority: OptimizePriority = 'balanced'): string {
+  const b = res.before;
+  const wrong: string[] = [];
+  if (b.tumorIncomplete) wrong.push('left part of the tumor behind');
+  else if (b.marginMm < th.marginMin) wrong.push(`had ${aN(r0(b.marginMm))} millimeter margin, under your ${th.marginMin}`);
+  if (b.remnantPct < th.remnantMin) wrong.push(`kept ${r0(b.remnantPct)} percent, under your ${th.remnantMin}`);
+  if (b.vesselsCrossed > 0) wrong.push(`crossed ${vesselPhrase(b)}`);
+  const start = wrong.length ? `Your cut ${wrong.join(', and ')}.` : 'Your cut met every target.';
+  const order =
+    priority === 'vessels'
+      ? 'whole tumor, your remnant, no vessels, then your margin'
+      : priority === 'remnant'
+        ? 'whole tumor, your margin and remnant, fewer vessels, then the most liver kept'
+        : 'whole tumor, your margin and remnant, fewer vessels, then staying close to your cut';
+  return (
+    `${start} I tried ${res.candidates} flat cuts within ${CONE_DEG} degrees and ${OFFSET_MM} millimeters of it, ranked by ${order}. ` +
+    `The pick: ${changeLine(b, res.after)}. Real resections follow liver segments; this is a planar approximation.`
+  );
+}
+
+/** "Is this cut OK": each number against its target, without calling anything safe. */
+export function planSummary(m: PlanMetrics, th: Thresholds): string {
+  if (m.tumorIncomplete) return 'Part of the tumor is on the side that stays, so this cut does not remove it. Say "optimize" to fix it.';
+  const marginOk = m.marginMm >= th.marginMin;
+  const remnantOk = m.remnantPct >= th.remnantMin;
+  const parts = [
+    `Margin ${r0(m.marginMm)} millimeters, ${marginOk ? 'meets' : 'under'} your ${th.marginMin}.`,
+    `Remnant ${r0(m.remnantPct)} percent, ${remnantOk ? 'above' : 'under'} your ${th.remnantMin}.`,
+    m.vesselsCrossed === 0 ? 'No vessels crossed.' : `Crosses ${vesselPhrase(m)}.`,
+  ];
+  const ok = marginOk && remnantOk && m.vesselsCrossed === 0;
+  parts.push(ok ? 'Every target is met.' : 'Say "optimize" to look for a better cut.');
+  return parts.join(' ');
+}
+
+/** The answer to "move the cut 5 mm closer to the tumor". */
+export function shiftReply(mm: number, before: PlanMetrics, after: PlanMetrics, preview: boolean): string {
+  const where = `${r0(Math.abs(mm))} millimeters ${mm > 0 ? 'closer to' : 'further from'} the tumor`;
+  return preview
+    ? `${cap(where)}: ${changeLine(before, after)}. It's outlined; say "do it" to move it.`
+    : `Moved ${where}. ${cap(changeLine(before, after))}.`;
 }
 
 /* ------------------------------------------------------------ patient mode */
@@ -235,7 +342,3 @@ export function planMarkdown(f: PlanFacts): string {
   return L.join('\n');
 }
 
-/** Lower-case only the first letter, so "I" and names inside stay as written. */
-function lowerFirst(s: string): string {
-  return s.charAt(0).toLowerCase() + s.slice(1);
-}

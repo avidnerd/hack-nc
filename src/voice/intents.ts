@@ -7,15 +7,34 @@
  * same code path as a keypress.
  */
 
-import type { PresetName } from '../types.ts';
+import type { OptimizePriority, PresetName } from '../types.ts';
 
 export type Intent =
   | { kind: 'window'; preset: PresetName }
   | { kind: 'show'; structure: string; on: boolean }
   | { kind: 'placeStent' }
   | { kind: 'removeDevice' }
-  /** Optional limits spoken with the request ("optimize with a 30 mm margin") become the thresholds. */
-  | { kind: 'optimize'; marginMm?: number; remnantPct?: number }
+  /**
+   * Re-seat the cut. Limits spoken with the request ("with a 30 mm margin")
+   * become the thresholds; `priority` says what to give up first; `widen`
+   * asks for 5 mm more margin than the cut has now. `preview` (a question:
+   * "what if", "is there", "would") outlines the answer without moving
+   * anything, and "do it" applies it.
+   */
+  | {
+      kind: 'optimize';
+      marginMm?: number;
+      remnantPct?: number;
+      priority?: Exclude<OptimizePriority, 'balanced'>;
+      widen?: boolean;
+      preview?: boolean;
+    }
+  /** Slide the cut along its normal; positive is toward the tumour. */
+  | { kind: 'shiftPlane'; mm: number; preview?: boolean }
+  | { kind: 'applyPreview' }
+  | { kind: 'undo' }
+  /** "Why did you move it"; with `about`, what limits that number on the current cut. */
+  | { kind: 'explain'; about?: 'margin' | 'remnant' | 'vessels' }
   | { kind: 'measure'; what: string }
   | { kind: 'suggest' }
   | { kind: 'outcomes' }
@@ -29,7 +48,7 @@ export type Intent =
   | { kind: 'plane'; on: boolean }
   | { kind: 'cut'; orientation: 'sagittal' | 'coronal' | 'axial'; through: string | null; offsetMm: number | null }
   | { kind: 'distance'; a: string; b: string }
-  | { kind: 'query'; what: 'margin' | 'remnant' | 'vessels' }
+  | { kind: 'query'; what: 'margin' | 'remnant' | 'vessels' | 'summary' }
   | { kind: 'relation'; a: string; b: string }
   | { kind: 'nearest'; a: string }
   | { kind: 'focus'; structure: string }
@@ -48,6 +67,10 @@ export const INTENT_KINDS = [
   'placeStent',
   'removeDevice',
   'optimize',
+  'shiftPlane',
+  'applyPreview',
+  'undo',
+  'explain',
   'measure',
   'suggest',
   'outcomes',
@@ -105,7 +128,10 @@ const WORD_NUMBERS: Record<string, number> = {
 function parseNumber(s: string): number | null {
   const digits = /-?\d+(?:\.\d+)?/.exec(s);
   if (digits) return parseFloat(digits[0]);
-  for (const [word, value] of Object.entries(WORD_NUMBERS)) {
+  // "twenty five": tens before units, or the units word alone would win.
+  const compound = /\b(twenty|thirty|forty|fifty)[ -](one|two|three|four|five|six|seven|eight|nine)\b/.exec(s);
+  if (compound) return WORD_NUMBERS[compound[1]] + WORD_NUMBERS[compound[2]];
+  for (const [word, value] of Object.entries(WORD_NUMBERS).sort((a, b) => b[1] - a[1])) {
     if (new RegExp(`\\b${word}\\b`).test(s)) return value;
   }
   return null;
@@ -188,11 +214,48 @@ function lengthMm(s: string): number | null {
   return /^c/.test(m[2]) ? n * 10 : n;
 }
 
-/** The first number spoken after `word` ("margin of 30" -> 30). */
+/** A number spoken right after `word` ("margin of 30", "margin to fifteen"); null otherwise. */
 function numberAfter(s: string, word: string): number | null {
-  const i = s.indexOf(word);
-  return i < 0 ? null : parseNumber(s.slice(i + word.length));
+  const m = new RegExp(String.raw`\b${word}\s+(?:of|to|at|around|about|is|was|were|be|set to|=)?\s*([a-z0-9.]+(?:[ -](?:five|one|two|three|four|six|seven|eight|nine))?)`).exec(s);
+  return m ? parseNumber(m[1]) : null;
 }
+
+const VESSEL_WORDS = String.raw`(vessels?|veins?|arter(?:y|ies)|portal|hepatic|ivc|vena cava|vasculature)`;
+
+/** What a planning request asks for, beyond "optimize". */
+function planOptions(s: string): Omit<Extract<Intent, { kind: 'optimize' }>, 'kind' | 'preview'> {
+  const out: Omit<Extract<Intent, { kind: 'optimize' }>, 'kind' | 'preview'> = {};
+  if (/\bmargin\b/.test(s)) {
+    const mm = lengthMm(s) ?? numberAfter(s, 'margin');
+    if (mm !== null && mm > 0) out.marginMm = mm;
+  }
+  const pct = /(\d+(?:\.\d+)?)\s*(?:%|percent)/.exec(s);
+  if (pct && /\b(remnant|remaining|left|liver|keep|keeping|kept|spare|save)\b/.test(s)) out.remnantPct = parseFloat(pct[1]);
+  if (
+    new RegExp(String.raw`\b(spare|spares|sparing|avoid|avoids|avoiding|miss|misses|clear|clears|protect|save|without (crossing|cutting|hitting|touching)|(do not|don'?t|doesn'?t|not|never|no) (cross|cut|hit|touch)\w*)\b.*\b${VESSEL_WORDS}\b`).test(s) ||
+    new RegExp(String.raw`\b(no|zero|fewer|less) ${VESSEL_WORDS}\b`).test(s) ||
+    new RegExp(String.raw`\b${VESSEL_WORDS} first\b`).test(s) ||
+    new RegExp(String.raw`\b(further|farther|away|clear|distance) (from|of)\b.*\b${VESSEL_WORDS}\b`).test(s)
+  ) {
+    out.priority = 'vessels';
+  } else if (
+    /\b(more|most|maximum|max|maximi[sz]e|bigger|larger)\b.*\b(liver|remnant|tissue)\b/.test(s) ||
+    /\b(liver|remnant)\b.*\b(first|bigger|larger)\b/.test(s)
+  ) {
+    out.priority = 'remnant';
+  }
+  if (
+    /\b(bigger|wider|larger|more|increase|widen|maximi[sz]e|better|safer)\b.*\bmargin\b|\bmargin\b.*\b(bigger|wider|larger)\b/.test(s) ||
+    /\bmore (breathing )?(room|space|clearance|distance)\b.*\btumou?r\b|\btumou?r\b.*\bmore (breathing )?(room|space|clearance|distance)\b/.test(s)
+  ) {
+    out.widen = true;
+  }
+  return out;
+}
+
+/** A question about a different plan, not an order to make it. */
+const HYPOTHETICAL =
+  /\b(what if|what would|what happens|what about|would|could|is there|are there|is it possible|possible to|how much .* (with|if)|can (i|we) (get|have|do)|any way)\b/;
 
 /* ------------------------------------------------------------------ grammar */
 
@@ -213,8 +276,21 @@ export function parseIntent(text: string): Intent | null {
   }
   if (/\b(tutorial|practi[cs]e|teach me|how do i use|show me how)\b/.test(s)) return { kind: 'tutorial' };
   if (/\b(compare|comparison|versus|difference between)\b/.test(s)) return { kind: 'comparePlan' };
-  if (/\b(previous|last) view\b|\bundo( that| the view)?\b|\b(go )?back to the (previous|last)\b/.test(s)) {
+  // Undo is about the cut first (an optimize, a "do it"); with nothing to
+  // undo there, main.ts falls back to the previous view.
+  if (
+    /^(undo|revert|put it back)\b/.test(s) ||
+    /\bundo (that|it|this|the (optimi[sz]ation|change|move|cut|last))\b/.test(s) ||
+    /\b(go back|return|revert|back) to (my|the old|the previous|the last|my old|my own) (cut|plane)\b/.test(s) ||
+    /\b(put|move) (it|the (cut|plane)) back\b/.test(s)
+  ) {
+    return { kind: 'undo' };
+  }
+  if (/\b(previous|last) view\b|\b(go )?back to the (previous|last)\b/.test(s)) {
     return { kind: 'previousView' };
+  }
+  if (/^(do it|do that|apply( it| that| this| the (cut|preview|suggestion))?|use (it|that|this)( one| cut| plane)?|go ahead|yes,? do (it|that)|make it so|accept( it| that)?|take it|let'?s do (it|that)|sounds good,? do it)$/.test(s)) {
+    return { kind: 'applyPreview' };
   }
   if (/\b(save|store|bookmark|mark)\b/.test(s) && /\b(plan|baseline|original|view|this|cut)\b/.test(s) && !/\b(write|export|download|note|file)\b/.test(s)) {
     return { kind: 'savePlan' };
@@ -242,6 +318,62 @@ export function parseIntent(text: string): Intent | null {
   }
   if (/\b(surgeon|clinical|technical|back)\b.*\b(view|mode)\b/.test(s) || /\bgo back\b/.test(s)) {
     return { kind: 'mode', mode: 'surgeon' };
+  }
+
+  /* --- planning conversation (before queries and outcomes, which share
+         "what", "how much" and "what if") ---------------------------------- */
+  {
+    const limiting =
+      /\bwhat('s| is| are) (limiting|stopping|holding back|constraining|preventing)\b/.test(s) ||
+      /\bwhy (is|isn'?t|can'?t|won'?t|doesn'?t|does)\b/.test(s) ||
+      /\b(can'?t|cannot) (you )?(get|make|widen|avoid|keep)\b/.test(s);
+    // "The trade-off between margin and vessels" is answered by what sparing
+    // the vessels would cost.
+    if (/\b(trade-?offs?|cost of sparing|price of)\b/.test(s)) {
+      if (new RegExp(String.raw`\b${VESSEL_WORDS}\b`).test(s)) return { kind: 'explain', about: 'vessels' };
+      if (/\bmargin\b/.test(s)) return { kind: 'explain', about: 'margin' };
+      if (/\b(remnant|liver)\b/.test(s)) return { kind: 'explain', about: 'remnant' };
+    }
+    if (limiting) {
+      if (/\bmargin\b/.test(s)) return { kind: 'explain', about: 'margin' };
+      if (/\b(remnant|liver left|more liver)\b/.test(s)) return { kind: 'explain', about: 'remnant' };
+      if (new RegExp(String.raw`\b${VESSEL_WORDS}\b`).test(s)) return { kind: 'explain', about: 'vessels' };
+    }
+    if (
+      /\b(why|how come|what made you)\b/.test(s) && /\b(move|moved|change|changed|pick|picked|choose|chose|that|it|this cut|the cut|tilt|tilted)\b/.test(s) ||
+      /\bexplain (the|that|your|this)? ?(cut|change|move|choice|decision|optimi[sz]ation|result)\b/.test(s) ||
+      limiting
+    ) {
+      return { kind: 'explain' };
+    }
+  }
+  if (
+    /\b(is|does) (this|the|my) (cut|plane|plan) (safe|ok|okay|good|acceptable|fine|reasonable|work|look (ok|okay|good|right))\b/.test(s) ||
+    /\bhow (does|is) (this|the|my) (cut|plane|plan) (look|looking|doing)\b/.test(s) ||
+    /\b(assess|evaluate|check|review|grade) (this|the|my) (cut|plane|plan)\b/.test(s) ||
+    /^(status|summary of the cut|where are we)$/.test(s)
+  ) {
+    return { kind: 'query', what: 'summary' };
+  }
+  if (/\b(how close|how far|distance)\b/.test(s) && /\b(cut|plane)\b/.test(s) && /\btumou?r\b/.test(s)) {
+    return { kind: 'query', what: 'margin' };
+  }
+  {
+    const hypothetical = HYPOTHETICAL.test(s);
+    const mm = lengthMm(s);
+    const toward = /\b(closer|toward|towards|nearer|into)\b/.test(s);
+    const away = /\b(away|further|farther|back from)\b/.test(s);
+    if (/\b(move|moved|shift|shifted|slide|push|pushed|bring|brought|put|nudge|nudged)\b/.test(s) && /\b(cut|plane|it)\b/.test(s) && mm !== null && (toward || away)) {
+      return { kind: 'shiftPlane', mm: toward ? mm : -mm, ...(hypothetical ? { preview: true } : {}) };
+    }
+    const opts = planOptions(s);
+    const asked = /\b(optimi[sz]e|optimi[sz]ation|fix|improve|correct|re-?plan|re-?optimi[sz]e|better (cut|plane|one)|do better|best (cut|plane|one)|as good as (you|it) can|best you can|best possible|(find|get|give me|is there|are there) (a|an|the|any) ?\w* (cut|plane))\b/.test(s);
+    const steering = opts.priority !== undefined || opts.widen === true;
+    const limits = opts.marginMm !== undefined || opts.remnantPct !== undefined;
+    // "set margin to 8" is a threshold, not a search; it is handled below.
+    if (asked || steering || (limits && hypothetical)) {
+      return { kind: 'optimize', ...opts, ...(hypothetical ? { preview: true } : {}) };
+    }
   }
 
   /* --- named cuts ("make a sagittal cut 10 mm from the tumor") ---------- */
@@ -299,18 +431,10 @@ export function parseIntent(text: string): Intent | null {
     return { kind: 'suggest' };
   }
 
-  /* --- optimizer --------------------------------------------------------- */
+  /* --- optimizer (the stent case's "optimize", and anything the planning
+         block above let through) ----------------------------------------- */
   if (/\b(optimi[sz]e|fix|improve|better|correct|re-?plan|replan)\b/.test(s)) {
-    const opt: Intent = { kind: 'optimize' };
-    if (/\bmargin\b/.test(s)) {
-      const mm = lengthMm(s) ?? numberAfter(s, 'margin');
-      if (mm !== null) opt.marginMm = mm;
-    }
-    if (/\b(remnant|remaining|left)\b/.test(s)) {
-      const pct = /(\d+(?:\.\d+)?)\s*(?:%|percent)/.exec(s);
-      if (pct) opt.remnantPct = parseFloat(pct[1]);
-    }
-    return opt;
+    return { kind: 'optimize' };
   }
 
   /* --- plan note --------------------------------------------------------- */
@@ -324,7 +448,8 @@ export function parseIntent(text: string): Intent | null {
       s,
     );
   if (thresholdMatch && /\b(set|make|minimum|at least|to)\b/.test(s)) {
-    const value = parseNumber(thresholdMatch[2]);
+    // From the match on, so "twenty five" is read whole, not as "twenty".
+    const value = parseNumber(s.slice(thresholdMatch.index + thresholdMatch[0].length - thresholdMatch[2].length));
     if (value !== null) {
       return {
         kind: 'setThreshold',
@@ -347,16 +472,26 @@ export function parseIntent(text: string): Intent | null {
   }
 
   /* --- lock -------------------------------------------------------------- */
-  if (/\b(unlock|release|let go|free)\b/.test(s)) return { kind: 'lock', on: false };
-  if (/\b(lock|hold|freeze|stay|keep it there)\b/.test(s)) return { kind: 'lock', on: true };
+  // Whole-command forms only: "stay further from the vein" is a planning
+  // request, not "lock".
+  if (/^(unlock|release|let go|free it|unfreeze)( it| that| the (cut|plane))?$|\bunlock\b/.test(s)) return { kind: 'lock', on: false };
+  if (/^(lock|hold|freeze)( it| that| this| the (cut|plane))?( there| still| in place)?$|^(stay|stay there|stay put|keep it there)$|\block (it|the (cut|plane))\b/.test(s)) {
+    return { kind: 'lock', on: true };
+  }
 
   /* --- reset ------------------------------------------------------------- */
   if (/\b(reset|start over|clear|start again|from scratch)\b/.test(s)) return { kind: 'reset' };
 
-  /* --- cutting plane ----------------------------------------------------- */
+  /* --- cutting plane: only an explicit on/off. A question that merely
+         mentions the cut falls through to the LLM instead of silently
+         switching the plane on. ------------------------------------------- */
   if (/\b(cut|slice|plane)\b/.test(s)) {
-    if (/\b(off|away|hide|stop|cancel|no)\b/.test(s)) return { kind: 'plane', on: false };
-    return { kind: 'plane', on: true };
+    if (/\b(hide|turn off|switch off|remove|disable|get rid of|no|stop|cancel)\b.*\b(cut|slice|plane)\b|\b(cut|slice|plane) (off|away)\b/.test(s)) {
+      return { kind: 'plane', on: false };
+    }
+    if (/^(the )?(cutting )?(cut|slice|plane)( on)?$/.test(s) || /\b(show|turn on|switch on|enable|bring back|give me|add|start|put in)\b.*\b(cut|slice|plane)\b|\b(cut|slice|plane) on\b/.test(s)) {
+      return { kind: 'plane', on: true };
+    }
   }
 
   /* --- visibility (last: the broadest patterns) -------------------------- */
@@ -377,6 +512,11 @@ export const VOICE_HELP: [string, string][] = [
   ['hide the skin', 'turn a structure off'],
   ['place the stent', 'deploy and size a graft'],
   ['optimize', 're-seat the cut or the stent'],
+  ['what if the margin were 20 mm', 'outline the best cut for it; "do it" applies'],
+  ['spare the vessels / keep more liver', 'optimize with that priority'],
+  ['why did you move it', 'explain the last change'],
+  ['undo', 'put your cut back'],
+  ['is this cut ok', 'every number against its target'],
   ['measure the kidney', 'standard measurement + normal range'],
   ['show me the tumour relative to the portal vein', 'fly to it, measure, highlight'],
   ['where is the tumour closest to a vessel', 'search every vessel, show the gap'],

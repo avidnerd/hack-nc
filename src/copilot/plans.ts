@@ -90,6 +90,11 @@ export class PlanStore {
     return true;
   }
 
+  /** True while an overwrite waits for "confirm". */
+  hasPending(now = Date.now()): boolean {
+    return this.pending !== null && now <= this.pending.until;
+  }
+
   /** Drop a held overwrite (cancel). */
   cancelPending(): boolean {
     const had = this.pending !== null;
