@@ -97,27 +97,27 @@ export const MOMENTS = [
 export const COPILOT = [
   {
     say: 'show me the tumor relative to the portal vein',
-    line: 'Measures the gap and turns to face it. 28.3 mm.',
+    note: 'Closest wall-to-wall gap, measured on the segmentation',
     asset: 'relation',
   },
   {
     say: 'show me where the tumor is closest to a major vessel',
-    line: 'Checks every vessel, shows the nearest. 4.8 mm.',
+    note: 'Nearest of every segmented vessel, with a CT slice through the gap',
     asset: 'nearest',
   },
   {
     say: 'measure the tumor',
-    line: 'The radiologist’s measurement. 66.6 × 52.8 mm.',
+    note: 'RECIST diameter, short axis and volume',
     asset: 'measure-tumor',
   },
   {
     say: 'compare this cut to the original plan',
-    line: 'Your saved plan beside the new cut. +3.9 mm margin.',
+    note: 'The saved plan and the new cut, run through the same engine',
     asset: 'compare',
   },
   {
     say: 'what are the outcomes',
-    line: 'Published rates for plans like this one, with the study.',
+    note: 'Published rates for plans in this range, each with its study',
     asset: 'outcomes',
   },
 ];

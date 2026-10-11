@@ -76,6 +76,14 @@ interface Clip {
   sub: string;
   /** 'moment3': start from the wedge cut tests/optimize.test.ts uses. */
   start?: 'moment3';
+  /** No inset card: just the app, for the website's annotated copilot stage. */
+  bare?: boolean;
+  /**
+   * An app element to annotate (e.g. its measurement tag). The recorder notes
+   * when it first appears and where it sits, in docs/video/<clip>.json, so the
+   * website can pin a label to the exact spot the app drew.
+   */
+  anchor?: string;
   /** Case to load before the clip starts. */
   caseId?: 'liver' | 'aorta';
   seconds: number;
@@ -193,6 +201,8 @@ const CLIPS: Clip[] = [
   },
   {
     name: 'relation',
+    bare: true,
+    anchor: '.caliper-label',
     title: 'Voice: show me',
     sub: 'Both structures found, the closest gap measured and framed side-on.',
     seconds: 6,
@@ -201,6 +211,8 @@ const CLIPS: Clip[] = [
   },
   {
     name: 'nearest',
+    bare: true,
+    anchor: '.caliper-label',
     title: 'Voice: nearest vessel',
     sub: 'Every segmented vessel searched at once; the closest one shown.',
     seconds: 6,
@@ -209,6 +221,8 @@ const CLIPS: Clip[] = [
   },
   {
     name: 'compare',
+    bare: true,
+    anchor: '.info-card.show',
     title: 'Voice: save, change, compare',
     sub: 'The saved plan and the new cut, side by side, through the same engine.',
     start: 'moment3',
@@ -222,6 +236,8 @@ const CLIPS: Clip[] = [
   },
   {
     name: 'measure-tumor',
+    bare: true,
+    anchor: '.caliper-label',
     title: 'Voice: measure',
     sub: 'The measurement a radiologist would report, with its normal range.',
     seconds: 5,
@@ -230,6 +246,8 @@ const CLIPS: Clip[] = [
   },
   {
     name: 'outcomes',
+    bare: true,
+    anchor: '.info-card.show',
     title: 'Voice: outcomes',
     sub: 'Published rates for the band this plan falls in, with the study.',
     start: 'moment3',
@@ -421,6 +439,7 @@ async function capture(clip: Clip): Promise<void> {
     const b = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
     await page.evaluate((b) => (window as unknown as PageWindow).__gifcard!.frame(...b), b);
   }
+  if (clip.bare) await page.addStyleTag({ content: '#gifcard { display: none !important; }' });
   // Let toasts and intro banners settle before time is frozen.
   await page.waitForTimeout(1500);
   await page.keyboard.press('Escape');
@@ -435,6 +454,8 @@ async function capture(clip: Clip): Promise<void> {
   const n = Math.round(clip.seconds * GIF_FPS);
   const voice = [...(clip.voice ?? [])];
   let saying = '';
+  let anchorFrom = -1;
+  let anchorRect: { x: number; y: number; w: number; h: number } | null = null;
   for (let i = 0; i < n; i++) {
     const t = i / GIF_FPS;
     while (voice.length && voice[0].at <= t) {
@@ -454,6 +475,21 @@ async function capture(clip: Clip): Promise<void> {
       [recFrame.hands, saying] as const,
     );
     await page.clock.runFor(step);
+    if (clip.anchor) {
+      const r = await page.evaluate((sel) => {
+        const el = [...document.querySelectorAll<HTMLElement>(sel)].find((e) => {
+          const b = e.getBoundingClientRect();
+          return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' && Number(getComputedStyle(e).opacity) > 0.5;
+        });
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        return { x: b.left / innerWidth, y: b.top / innerHeight, w: b.width / innerWidth, h: b.height / innerHeight };
+      }, clip.anchor);
+      if (r) {
+        if (anchorFrom < 0) anchorFrom = i;
+        anchorRect = r;
+      }
+    }
     frames.push(await page.screenshot({ timeout: 90_000 }));
     jpegs.push(await page.screenshot({ type: 'jpeg', quality: 95, timeout: 90_000 }));
   }
@@ -470,6 +506,13 @@ async function capture(clip: Clip): Promise<void> {
   mkdirSync('docs/video', { recursive: true });
   const gifBytes = encodeGif(frames, `docs/gifs/${clip.name}.gif`);
   const webmBytes = encodeWebm(jpegs, `docs/video/${clip.name}.webm`);
+  if (clip.anchor) {
+    if (!anchorRect) console.warn(`[clip] ${clip.name}: anchor ${clip.anchor} never appeared`);
+    writeFileSync(
+      `docs/video/${clip.name}.json`,
+      JSON.stringify({ anchor: clip.anchor, appearsAt: anchorFrom < 0 ? null : +(anchorFrom / n).toFixed(3), rect: anchorRect }, null, 2) + '\n',
+    );
+  }
   const mb = (n: number | null) => (n === null ? 'skipped' : `${(n / 1e6).toFixed(2)} MB`);
   console.log(`[clip] ${clip.name}  ${frames.length} frames  gif ${mb(gifBytes)}  webm ${mb(webmBytes)}`);
 }

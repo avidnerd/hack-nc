@@ -1,19 +1,222 @@
 ---
-import { COPILOT } from '../data/content.ts';
-import Stepper from './Stepper.astro';
+/**
+ * The voice copilot as one stage: a spoken command appears, the app responds
+ * in the clip, and a label is pinned to the spot it measured. Scrolling moves
+ * to the next command (scripts/motion.ts pins and steps it).
+ *
+ * Where each label points comes from the recorder: scripts/gesture-gifs.ts
+ * notes where the app drew its measurement or panel, and when it appeared,
+ * in docs/video/<clip>.json.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const items = COPILOT.map((c) => ({
-  label: c.say,
-  line: c.line,
-  asset: c.asset,
-  alt: `Scrub+ responding to “scrub, ${c.say}”.`,
-}));
+import { COPILOT } from '../data/content.ts';
+
+interface Anchor {
+  appearsAt: number | null;
+  rect: { x: number; y: number; w: number; h: number } | null;
+}
+const dir = fileURLToPath(new URL('../../public/video/', import.meta.url));
+const steps = COPILOT.map((c) => {
+  const json = `${dir}${c.asset}.json`;
+  const a: Anchor = existsSync(json) ? JSON.parse(readFileSync(json, 'utf8')) : { appearsAt: null, rect: null };
+  const r = a.rect ?? { x: 0.45, y: 0.45, w: 0.1, h: 0.04 };
+  // Labels go to the right of the element unless that would run off the
+  // screen; the app's own panels sit on the left.
+  const right = r.x + r.w < 0.72;
+  const px = right ? r.x + r.w : r.x;
+  const py = r.y + r.h / 2;
+  return {
+    ...c,
+    hasVideo: existsSync(`${dir}${c.asset}.webm`),
+    // The rect is where the element comes to rest; the camera is still moving
+    // when it first appears, so the label waits for the view to settle.
+    at: Math.min(0.85, Math.max(0.5, (a.appearsAt ?? 0.3) + 0.3)),
+    style: `--px:${(px * 100).toFixed(2)}%;--py:${(py * 100).toFixed(2)}%`,
+    side: right ? 'right' : 'left',
+  };
+});
 ---
 
-<Stepper
-  id="copilot-label"
-  heading="Say what you need to see"
-  note="Recorded from the app, each phrase exactly as spoken."
-  items={items}
-  quoted
-/>
+<section class="copilot" aria-labelledby="copilot-label" data-copilot>
+  <div class="wrap inner">
+    <h2 class="h2 heading" id="copilot-label">A surgical copilot that measures what you ask about.</h2>
+    <ol class="stage">
+      {
+        steps.map((s, i) => (
+          <li class="step" data-cstep={i} data-at={s.at} aria-current={i === 0 ? 'step' : undefined}>
+            <div class="screen">
+              {s.hasVideo ? (
+                <video muted playsinline loop data-autoplay preload="metadata" width="960" height="600" aria-label={`Scrub+ responding to “scrub, ${s.say}”`}>
+                  <source src={`/video/${s.asset}.webm`} type="video/webm" />
+                </video>
+              ) : (
+                <div class="pending label">Recording pending</div>
+              )}
+              <p class="cmd">
+                <span class="said">“scrub, {s.say}”</span>
+              </p>
+              <p class:list={['note', s.side]} style={s.style}>
+                <span class="dot" aria-hidden="true" />
+                <span class="lead" aria-hidden="true" />
+                <span class="text">{s.note}</span>
+              </p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="label count" aria-hidden="true"><span data-ccount>1</span> / {steps.length}</p>
+  </div>
+</section>
+
+<style>
+  .copilot {
+    position: relative;
+    padding-block: var(--s-20);
+  }
+  .heading {
+    font-size: var(--fs-44);
+    max-width: 22ch;
+    margin-bottom: var(--s-4);
+  }
+  .stage {
+    display: grid;
+    gap: var(--s-8);
+  }
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border: var(--hair);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--frame);
+  }
+  video,
+  .pending {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .pending {
+    display: grid;
+    place-items: center;
+  }
+
+  /* The spoken command, set over the top of the screen like a transcript. */
+  .cmd {
+    position: absolute;
+    left: 50%;
+    top: 4%;
+    transform: translateX(-50%);
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgb(5 15 26 / 0.86);
+    border: 1px solid var(--line);
+    font-family: var(--font-mono);
+    font-size: var(--fs-16);
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* The annotation: a dot on the spot the app measured, a short leader, and
+     one line saying what it did. */
+  .note {
+    position: absolute;
+    left: var(--px);
+    top: var(--py);
+    display: flex;
+    align-items: center;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .note.left {
+    flex-direction: row-reverse;
+    transform: translate(-100%, -50%);
+  }
+  .dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 3px solid rgb(79 227 193 / 0.25);
+  }
+  .lead {
+    flex: none;
+    width: clamp(24px, 4vw, 56px);
+    height: 1px;
+    background: var(--accent);
+  }
+  .text {
+    max-width: 26ch;
+    padding: 0.5rem 0.75rem;
+    background: rgb(5 15 26 / 0.92);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    font-size: var(--fs-16);
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .count {
+    margin-top: var(--s-2);
+  }
+
+  /* Pinned (desktop, motion allowed): one command at a time. */
+  .copilot[data-pinned] {
+    height: 100vh;
+    padding-block: 0;
+    display: flex;
+    align-items: center;
+  }
+  .copilot[data-pinned] > .inner {
+    flex: 1;
+  }
+  .copilot[data-pinned] .stage {
+    gap: 0;
+    max-width: min(100%, calc((100vh - 13rem) * 1.6));
+  }
+  .copilot[data-pinned] .step {
+    grid-area: 1 / 1;
+    opacity: 0;
+    transition: opacity var(--dur) var(--ease-scrub);
+  }
+  .copilot[data-pinned] .step[aria-current] {
+    opacity: 1;
+  }
+  .copilot[data-pinned] .said {
+    display: inline-block;
+    clip-path: inset(0 100% 0 0);
+  }
+  .copilot[data-pinned] .step.typed .said {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 900ms steps(28, end);
+  }
+  .copilot[data-pinned] .note {
+    opacity: 0;
+    transition: opacity var(--dur) var(--ease-in);
+  }
+  .copilot[data-pinned] .step.landed .note {
+    opacity: 1;
+  }
+  .copilot:not([data-pinned]) .count {
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    .cmd {
+      font-size: var(--fs-12);
+      white-space: normal;
+      width: 90%;
+      text-align: center;
+      border-radius: var(--radius);
+    }
+    .text {
+      font-size: var(--fs-12);
+      max-width: 18ch;
+    }
+  }
+</style>
