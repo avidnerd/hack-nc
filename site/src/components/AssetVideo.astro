@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 interface Props {
   name: string;
-  caption: string;
+  caption?: string;
   alt: string;
 }
 const { name, caption, alt } = Astro.props;
@@ -47,7 +47,7 @@ const poster = has('jpg') ? `/video/${name}.jpg` : undefined;
       </div>
     )
   }
-  <figcaption class="label">{caption}</figcaption>
+  {caption && <figcaption class="label">{caption}</figcaption>}
 </figure>
 
 <style>

@@ -1,152 +1,18 @@
 ---
 import { GESTURES } from '../data/content.ts';
-import AssetVideo from './AssetVideo.astro';
+import Stepper from './Stepper.astro';
+
+const items = GESTURES.map((g) => ({
+  label: g.label,
+  line: g.line,
+  asset: g.asset,
+  alt: `A gloved hand making the ${g.label.toLowerCase()} gesture, with Scrub+ responding on a liver CT.`,
+}));
 ---
 
-<section class="gestures" aria-labelledby="gestures-label" data-gestures>
-  <div class="wrap stage">
-    <h2 class="h2 heading" id="gestures-label">Four hand shapes</h2>
-    <div class="grid layout">
-      <ol class="steps">
-        {
-          GESTURES.map((g, i) => (
-            <li class="step" data-step={i} aria-current={i === 0 ? 'step' : undefined}>
-              <h3 class="name">{g.label}</h3>
-              <p class="line">{g.line}</p>
-            </li>
-          ))
-        }
-      </ol>
-      <div class="media">
-        {
-          GESTURES.map((g, i) => (
-            <div class="frame" data-frame={i}>
-              <AssetVideo
-                name={g.asset}
-                caption={`${g.label}. Rendered by the app. The glove is posed from the landmarks it was fed.`}
-                alt={`A gloved hand performing ${g.label.toLowerCase()}, with Scrub+ responding on a real liver CT.`}
-              />
-            </div>
-          ))
-        }
-      </div>
-    </div>
-    <div class="voice">
-      <p class="h3">Everything else is voice.</p>
-      <p class="transcript mono" data-transcript>
-        <span class="label">Transcript</span>
-        <span class="said">scrub, place the stent</span>
-      </p>
-    </div>
-  </div>
-</section>
-
-<style>
-  .gestures {
-    position: relative;
-    padding-block: var(--s-20);
-  }
-  .layout {
-    row-gap: var(--s-6);
-  }
-  .steps {
-    grid-column: 1 / span 5;
-    border-top: var(--hair);
-    align-self: start;
-  }
-  .step {
-    display: grid;
-    row-gap: var(--s-1);
-    padding-block: var(--s-3);
-    border-bottom: var(--hair);
-  }
-  .name {
-    font-size: var(--fs-20);
-    font-weight: 500;
-    letter-spacing: var(--track-tight);
-  }
-  .heading {
-    margin-bottom: var(--s-8);
-    max-width: 14ch;
-  }
-  .line {
-    color: var(--text-dim);
-    font-size: var(--fs-16);
-    max-width: 44ch;
-  }
-  .media {
-    grid-column: 7 / span 6;
-    display: grid;
-  }
-  .frame {
-    grid-area: 1 / 1;
-  }
-
-  /* Pinned sequence (desktop, motion allowed): one gesture at a time. */
-  :global(html.motion) .gestures[data-pinned] .step {
-    transition: opacity var(--dur) var(--ease-scrub);
-  }
-  :global(html.motion) .gestures[data-pinned] .step:not([aria-current]) {
-    opacity: 0.32;
-  }
-  :global(html.motion) .gestures[data-pinned] .frame {
-    opacity: 0;
-    transition: opacity var(--dur) var(--ease-scrub);
-  }
-  :global(html.motion) .gestures[data-pinned] .frame.on {
-    opacity: 1;
-  }
-  .gestures[data-pinned] {
-    height: 100vh;
-    padding-block: 0;
-    display: flex;
-    align-items: center;
-  }
-  .gestures[data-pinned] > .stage {
-    flex: 1;
-  }
-  .gestures[data-pinned] .step {
-    padding-block: var(--s-2);
-  }
-
-  /* Without the pin, every frame is shown in turn under its step. */
-  .gestures:not([data-pinned]) .media {
-    gap: var(--s-4);
-  }
-  .gestures:not([data-pinned]) .frame {
-    grid-area: auto;
-  }
-
-  .voice {
-    margin-top: var(--s-8);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--s-2) var(--s-6);
-    border-top: var(--hair);
-    padding-top: var(--s-3);
-  }
-  .transcript {
-    display: flex;
-    gap: var(--s-2);
-    align-items: baseline;
-    font-size: var(--fs-20);
-  }
-  .said {
-    display: inline-block;
-    clip-path: inset(0 0 0 0);
-  }
-  :global(html.motion) .transcript:not(.in) .said {
-    clip-path: inset(0 100% 0 0);
-  }
-  .transcript.in .said {
-    transition: clip-path var(--dur-long) steps(22, end);
-  }
-
-  @media (max-width: 1023px) {
-    .steps,
-    .media {
-      grid-column: 1 / -1;
-    }
-  }
-</style>
+<Stepper
+  id="gestures-label"
+  heading="Four hand shapes"
+  note="Recorded from the app. The glove is drawn from the hand data it received."
+  items={items}
+/>

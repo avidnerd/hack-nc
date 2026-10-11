@@ -1,0 +1,19 @@
+---
+import { COPILOT } from '../data/content.ts';
+import Stepper from './Stepper.astro';
+
+const items = COPILOT.map((c) => ({
+  label: c.say,
+  line: c.line,
+  asset: c.asset,
+  alt: `Scrub+ responding to “scrub, ${c.say}”.`,
+}));
+---
+
+<Stepper
+  id="copilot-label"
+  heading="Say what you need to see"
+  note="Recorded from the app, each phrase exactly as spoken."
+  items={items}
+  quoted
+/>

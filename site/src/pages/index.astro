@@ -1,29 +1,25 @@
 ---
 import Footer from '../components/Footer.astro';
-import Formulas from '../components/Formulas.astro';
+import Copilot from '../components/Copilot.astro';
 import Gestures from '../components/Gestures.astro';
 import Hero from '../components/Hero.astro';
-import Limits from '../components/Limits.astro';
 import Moments from '../components/Moments.astro';
 import Nav from '../components/Nav.astro';
 import Problem from '../components/Problem.astro';
-import Validation from '../components/Validation.astro';
 import Base from '../layouts/Base.astro';
 ---
 
 <Base
-  title="Scrub+. Put your hand through the patient."
-  description="Touchless 3D surgical planning from a laptop webcam. A flat palm slices a real CT, voice places a stent or optimizes a liver cut, and every number comes from a formula."
+  title="Scrub+ · Touchless surgical planning"
+  description="Scrub+ turns a laptop webcam into a touchless surgical planning console. An open hand cuts a real CT; spoken commands measure the anatomy, optimize the cut and compare plans, with every number computed from the scan."
 >
   <Nav />
   <main>
     <Hero />
     <Problem />
     <Gestures />
+    <Copilot />
     <Moments />
-    <Formulas />
-    <Validation />
-    <Limits />
   </main>
   <Footer />
 </Base>

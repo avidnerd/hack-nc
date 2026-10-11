@@ -27,6 +27,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { synthHand, toRaw, type SynthOpts } from '../src/input/synthHand.ts';
+import { parseIntent, stripWake } from '../src/voice/intents.ts';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('@playwright/test') as typeof import('@playwright/test');
@@ -41,7 +42,8 @@ const { GIFEncoder, quantize, applyPalette } = require('gifenc') as {
   applyPalette: (rgba: Uint8Array, palette: number[][], format?: string) => Uint8Array;
 };
 
-const URL_APP = process.env.SCRUB_URL ?? 'http://localhost:5173/';
+// ?tutorial=0 skips the first-visit practice tutorial and opens the liver case.
+const URL_APP = process.env.SCRUB_URL ?? 'http://localhost:5173/?tutorial=0';
 const ASPECT = 4 / 3;
 const REC_FPS = 30;
 /** GIF frame rate; every other recording frame. */
@@ -50,6 +52,19 @@ const GIF_FPS = 15;
 const W = 960;
 const H = 600;
 const DPR = 2;
+
+/** Page globals this script touches: the app's window.scrub and glove.js's card. */
+interface GifCard {
+  text(title: string, sub: string): void;
+  voiceOnly(): void;
+  frame(...bounds: number[]): void;
+  draw(hands: unknown): void;
+  say(text: string): void;
+}
+type PageWindow = Window & {
+  scrub?: { state?: { phase?: string }; dispatch(intent: unknown, source: string): void };
+  __gifcard?: GifCard;
+};
 
 type Side = 'left' | 'right';
 type Hand = { side: Side; o: SynthOpts };
@@ -66,7 +81,9 @@ interface Clip {
   seconds: number;
   hands: (t: number) => Hand[];
   /** Intents to dispatch at a time (s), with the phrase to caption. */
-  voice?: { at: number; say: string; intent: object }[];
+  /** Phrases said at a time (s). Each goes through the app's own wake word
+   * and speech grammar, so the clip shows exactly what that sentence does. */
+  voice?: { at: number; say: string }[];
 }
 
 const ease = (x: number) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
@@ -158,7 +175,7 @@ const CLIPS: Clip[] = [
     start: 'moment3',
     seconds: 6,
     hands: () => [],
-    voice: [{ at: 1.2, say: 'scrub, optimize', intent: { kind: 'optimize' } }],
+    voice: [{ at: 1.2, say: 'scrub, optimize' }],
   },
   {
     name: 'stent',
@@ -168,11 +185,57 @@ const CLIPS: Clip[] = [
     seconds: 8,
     hands: () => [],
     voice: [
-      { at: 0.6, say: 'scrub, place the stent', intent: { kind: 'placeStent' } },
-      { at: 3.4, say: 'scrub, move the stent up', intent: { kind: 'nudgeStent', mm: -5 } },
-      { at: 4.2, say: 'scrub, move the stent up', intent: { kind: 'nudgeStent', mm: -5 } },
-      { at: 5.0, say: 'scrub, move the stent up', intent: { kind: 'nudgeStent', mm: -5 } },
+      { at: 0.6, say: 'scrub, place the stent' },
+      { at: 3.4, say: 'scrub, move the stent up' },
+      { at: 4.2, say: 'scrub, move the stent up' },
+      { at: 5.0, say: 'scrub, move the stent up' },
     ],
+  },
+  {
+    name: 'relation',
+    title: 'Voice: show me',
+    sub: 'Both structures found, the closest gap measured and framed side-on.',
+    seconds: 6,
+    hands: () => [],
+    voice: [{ at: 0.6, say: 'scrub, show me the tumor relative to the portal vein' }],
+  },
+  {
+    name: 'nearest',
+    title: 'Voice: nearest vessel',
+    sub: 'Every segmented vessel searched at once; the closest one shown.',
+    seconds: 6,
+    hands: () => [],
+    voice: [{ at: 0.6, say: 'scrub, show me where the tumor is closest to a major vessel' }],
+  },
+  {
+    name: 'compare',
+    title: 'Voice: save, change, compare',
+    sub: 'The saved plan and the new cut, side by side, through the same engine.',
+    start: 'moment3',
+    seconds: 9,
+    hands: () => [],
+    voice: [
+      { at: 0.5, say: 'scrub, save this plan' },
+      { at: 2.2, say: 'scrub, optimize' },
+      { at: 5.0, say: 'scrub, compare this cut to the original plan' },
+    ],
+  },
+  {
+    name: 'measure-tumor',
+    title: 'Voice: measure',
+    sub: 'The measurement a radiologist would report, with its normal range.',
+    seconds: 5,
+    hands: () => [],
+    voice: [{ at: 0.6, say: 'scrub, measure the tumor' }],
+  },
+  {
+    name: 'outcomes',
+    title: 'Voice: outcomes',
+    sub: 'Published rates for the band this plan falls in, with the study.',
+    start: 'moment3',
+    seconds: 6,
+    hands: () => [],
+    voice: [{ at: 0.6, say: 'scrub, what are the outcomes' }],
   },
 ];
 
@@ -250,17 +313,24 @@ function half(src: Uint8Array): Uint8Array {
   return out;
 }
 
-/** GIF with a palette per frame: the UI text and the render both keep their colours. */
-function encodeGif(frames: Buffer[], out: string): number {
+/** GitHub refuses images over 10 MB in a README. */
+const GIF_LIMIT = 9.5e6;
+
+/**
+ * GIF with a palette per frame: the UI text and the render both keep their
+ * colours. A clip that would pass GIF_LIMIT is written at half the frame rate.
+ */
+function encodeGif(frames: Buffer[], out: string, every = 1): number {
   const enc = GIFEncoder();
-  const delay = Math.round(1000 / GIF_FPS);
-  frames.forEach((f, i) => {
+  const delay = Math.round((1000 / GIF_FPS) * every);
+  frames.filter((_, i) => i % every === 0).forEach((f, i) => {
     const rgba = half(PNG.sync.read(f).data as unknown as Uint8Array);
     const palette = quantize(rgba, 256);
     enc.writeFrame(applyPalette(rgba, palette), W, H, { palette, delay, first: i === 0 });
   });
   enc.finish();
   const bytes = enc.bytes();
+  if (bytes.length > GIF_LIMIT && every === 1) return encodeGif(frames, out, 2);
   writeFileSync(out, bytes);
   return bytes.length;
 }
@@ -322,27 +392,34 @@ async function capture(clip: Clip): Promise<void> {
 
   await page.clock.install();
   await page.goto(URL_APP, { waitUntil: 'load' });
-  await page.waitForFunction(() => (window as any).scrub?.state?.phase === 'ready', null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as unknown as PageWindow).scrub?.state?.phase === 'ready', null, { timeout: 60_000 });
   if (clip.caseId && clip.caseId !== 'liver') {
-    await page.evaluate((id) => (window as any).scrub.dispatch({ kind: 'loadCase', id }, 'key'), clip.caseId);
+    await page.evaluate((id) => (window as unknown as PageWindow).scrub!.dispatch({ kind: 'loadCase', id }, 'key'), clip.caseId);
     await page.waitForTimeout(2500);
   }
   if (clip.start === 'moment3') await page.evaluate(MOMENT3);
   await page.addScriptTag({ type: 'module', url: '/__gif/glove.js' });
   // Polled from Node: the page's own timers are under the fake clock, and the
   // overlay finishes only once the glove model has loaded and been rigged.
-  for (let t = 0; !(await page.evaluate(() => !!(window as any).__gifcard)); t += 250) {
+  for (let t = 0; !(await page.evaluate(() => !!(window as unknown as PageWindow).__gifcard)); t += 250) {
     if (t > 30_000) throw new Error('glove overlay did not load');
     await new Promise((r) => setTimeout(r, 250));
   }
-  await page.evaluate(([t, s]) => (window as any).__gifcard.text(t, s), [clip.title, clip.sub]);
-  if (rec.frames.every((f) => f.hands.length === 0)) await page.evaluate(() => (window as any).__gifcard.voiceOnly());
+  await page.evaluate(([t, s]) => (window as unknown as PageWindow).__gifcard!.text(t, s), [clip.title, clip.sub]);
+  if (rec.frames.every((f) => f.hands.length === 0)) await page.evaluate(() => (window as unknown as PageWindow).__gifcard!.voiceOnly());
   else {
     const xs: number[] = [];
     const ys: number[] = [];
-    for (const f of rec.frames) for (const h of f.hands) for (let i = 0; i < 21; i++) xs.push(h.lm[i * 3]), ys.push(h.lm[i * 3 + 1]);
+    for (const f of rec.frames) {
+      for (const h of f.hands) {
+        for (let i = 0; i < 21; i++) {
+          xs.push(h.lm[i * 3]);
+          ys.push(h.lm[i * 3 + 1]);
+        }
+      }
+    }
     const b = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    await page.evaluate((b) => (window as any).__gifcard.frame(...b), b);
+    await page.evaluate((b) => (window as unknown as PageWindow).__gifcard!.frame(...b), b);
   }
   // Let toasts and intro banners settle before time is frozen.
   await page.waitForTimeout(1500);
@@ -363,19 +440,22 @@ async function capture(clip: Clip): Promise<void> {
     while (voice.length && voice[0].at <= t) {
       const v = voice.shift()!;
       saying = v.say;
-      await page.evaluate((intent) => (window as any).scrub.dispatch(intent, 'voice'), v.intent);
+      const text = stripWake(v.say);
+      const intent = text === null ? null : parseIntent(text);
+      if (!intent) throw new Error(`grammar does not understand "${v.say}"`);
+      await page.evaluate((i) => (window as unknown as PageWindow).scrub!.dispatch(i, 'voice'), intent);
     }
     const recFrame = rec.frames[Math.min(rec.frames.length - 1, Math.round(t * REC_FPS))];
     await page.evaluate(
       ([hands, say]) => {
-        (window as any).__gifcard.draw(hands);
-        (window as any).__gifcard.say(say);
+        (window as unknown as PageWindow).__gifcard!.draw(hands);
+        (window as unknown as PageWindow).__gifcard!.say(say);
       },
       [recFrame.hands, saying] as const,
     );
     await page.clock.runFor(step);
-    frames.push(await page.screenshot());
-    jpegs.push(await page.screenshot({ type: 'jpeg', quality: 95 }));
+    frames.push(await page.screenshot({ timeout: 90_000 }));
+    jpegs.push(await page.screenshot({ type: 'jpeg', quality: 95, timeout: 90_000 }));
   }
   await browser.close();
 
@@ -397,15 +477,17 @@ async function capture(clip: Clip): Promise<void> {
 const wanted = process.argv.slice(2);
 for (const clip of CLIPS) {
   if (wanted.length && !wanted.includes(clip.name)) continue;
-  // The dev server occasionally full-reloads the page mid-clip (its watcher
-  // reacting to files just written), which drops the overlay. Start over.
+  // The dev server occasionally full-reloads the page mid-clip (the first
+  // time a lazily loaded code path pulls in a dependency it re-bundles and
+  // reloads every client), which drops the overlay. Pause and start over.
   for (let attempt = 1; ; attempt++) {
     try {
       await capture(clip);
       break;
     } catch (err) {
-      if (attempt >= 3) throw err;
+      if (attempt >= 4) throw err;
       console.warn(`[clip] ${clip.name} failed (${(err as Error).message.split('\n')[0]}), retrying`);
+      await new Promise((r) => setTimeout(r, 4000));
     }
   }
 }

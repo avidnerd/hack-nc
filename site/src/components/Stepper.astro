@@ -1,0 +1,163 @@
+---
+/**
+ * A pinned scroll sequence: a list of items on the left, the clip for the
+ * current one on the right. On desktop (with motion allowed) scripts/motion.ts
+ * pins it and steps through one item per scroll stretch; otherwise every clip
+ * is shown in turn. Used by the gestures and the voice copilot sections.
+ */
+import AssetVideo from './AssetVideo.astro';
+
+export interface StepItem {
+  label: string;
+  line: string;
+  asset: string;
+  alt: string;
+}
+
+interface Props {
+  id: string;
+  heading: string;
+  intro?: string;
+  /** One line under the clips, said once for the whole sequence. */
+  note?: string;
+  items: StepItem[];
+  quoted?: boolean;
+}
+const { id, heading, intro, note, items, quoted = false } = Astro.props;
+---
+
+<section class="stepper" aria-labelledby={id} data-stepper>
+  <div class="wrap stage">
+    <div class="head">
+      <h2 class="h2" id={id}>{heading}</h2>
+      {intro && <p class="body intro">{intro}</p>}
+    </div>
+    <div class="grid layout">
+      <ol class="steps">
+        {
+          items.map((it, i) => (
+            <li class="step" data-step={i} aria-current={i === 0 ? 'step' : undefined}>
+              <h3 class:list={['name', { quoted }]}>{quoted ? `“${it.label}”` : it.label}</h3>
+              <p class="line">{it.line}</p>
+            </li>
+          ))
+        }
+      </ol>
+      <div class="media">
+        {
+          items.map((it, i) => (
+            <div class="frame" data-frame={i}>
+              <AssetVideo name={it.asset} alt={it.alt} />
+            </div>
+          ))
+        }
+        {note && <p class="label note">{note}</p>}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .stepper {
+    position: relative;
+    padding-block: var(--s-20);
+  }
+  .head {
+    display: grid;
+    gap: var(--s-2);
+    margin-bottom: var(--s-6);
+  }
+  .head .h2 {
+    max-width: 16ch;
+  }
+  .intro {
+    max-width: 52ch;
+  }
+  .layout {
+    row-gap: var(--s-6);
+  }
+  .steps {
+    grid-column: 1 / span 5;
+    border-top: var(--hair);
+    align-self: start;
+  }
+  .step {
+    display: grid;
+    row-gap: var(--s-1);
+    padding-block: var(--s-3);
+    border-bottom: var(--hair);
+  }
+  .name {
+    font-size: var(--fs-20);
+    font-weight: 500;
+    letter-spacing: var(--track-tight);
+  }
+  .name.quoted {
+    font-size: var(--fs-18);
+  }
+  .line {
+    color: var(--text-dim);
+    font-size: var(--fs-16);
+    max-width: 44ch;
+  }
+  .media {
+    grid-column: 7 / span 6;
+    display: grid;
+  }
+  .frame {
+    grid-area: 1 / 1;
+  }
+  .note {
+    margin-top: var(--s-2);
+  }
+
+  /* Pinned sequence (desktop, motion allowed): one item at a time. */
+  :global(html.motion) .stepper[data-pinned] .step {
+    transition: opacity var(--dur) var(--ease-scrub);
+  }
+  :global(html.motion) .stepper[data-pinned] .step:not([aria-current]) {
+    opacity: 0.32;
+  }
+  :global(html.motion) .stepper[data-pinned] .frame {
+    opacity: 0;
+    transition: opacity var(--dur) var(--ease-scrub);
+  }
+  :global(html.motion) .stepper[data-pinned] .frame.on {
+    opacity: 1;
+  }
+  .stepper[data-pinned] {
+    height: 100vh;
+    padding-block: 0;
+    display: flex;
+    align-items: center;
+  }
+  .stepper[data-pinned] > .stage {
+    flex: 1;
+  }
+  .stepper[data-pinned] .step {
+    padding-block: var(--s-2);
+  }
+  /* Pinned, the whole sequence has to fit one screen. */
+  .stepper[data-pinned] .head {
+    margin-bottom: var(--s-4);
+  }
+  .stepper[data-pinned] .head .h2 {
+    font-size: var(--fs-44);
+    max-width: none;
+  }
+
+  /* Without the pin, every clip is shown in turn. */
+  .stepper:not([data-pinned]) .media {
+    gap: var(--s-4);
+  }
+  .stepper:not([data-pinned]) .frame {
+    grid-area: auto;
+  }
+
+  @media (max-width: 1023px) {
+    .steps,
+    .media {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

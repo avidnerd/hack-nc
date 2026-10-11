@@ -86,9 +86,9 @@ export class HeroRenderer {
   /** Orbit, in radians. */
   yaw = 0;
   pitch = 0;
-  dist = 1.75;
+  dist = 1.95;
   /** Fraction of the width the render centre sits right of the page centre. */
-  shift = 0.24;
+  shift = 0.27;
 
   private frameMs = 12;
   private steps = 192;
@@ -181,8 +181,12 @@ export class HeroRenderer {
     this.stepsMax = Math.max(this.stepsMax, Math.min(448, Math.round(Math.max(nx, ny, nz) * 1.6)));
   }
 
+  /** The plane last set, in world mm; what the live numbers are computed for. */
+  plane: { on: boolean; n: Vec3; d: number } = { on: false, n: [1, 0, 0], d: 0 };
+
   /** World-mm plane n·x = d; the positive side is cut away. */
   setPlane(on: boolean, n: Vec3 = [1, 0, 0], d = 0): void {
+    this.plane = { on, n, d };
     const u = this.material.uniforms;
     u.uPlaneOn.value = on;
     const op = planeToObject(this.frame, { n, d });
