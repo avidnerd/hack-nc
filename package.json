@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "build:web": "node scripts/build-web.mjs",
     "smoke:prod": "node --experimental-transform-types scripts/smoke-prod.mjs",
+    "audit:vessels": "node --experimental-transform-types scripts/vessel-audit.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

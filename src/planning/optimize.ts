@@ -11,6 +11,7 @@
 import { angleDeg, cross, normalize, type Vec3 } from '../coords.ts';
 import type { PlanMetrics, Plane, Thresholds } from '../types.ts';
 import { evaluatePlane, type EngineContext } from './engine.ts';
+import { vesselCrossingsAlong } from './vessels.ts';
 import type { CoarseGrid } from './volume.ts';
 
 export const CONE_DEG = 20;
@@ -96,6 +97,16 @@ export function violations(m: PlanMetrics, th: Thresholds): OptimizeResult['viol
 
 /** How many of the coarse grid's best candidates are re-scored on the fine grid. */
 export const RESCORE = 24;
+/**
+ * Near misses also re-scored: candidates the plane-to-tumour proxy puts up
+ * to MARGIN_SLACK_MM short of the margin target. The proxy is a lower bound
+ * on the true cut-surface margin (the cut face may not reach the tumour's
+ * nearest point); on the liver case it read 7.4 mm for a plane whose true
+ * margin is 10.2 mm, which ranked the only one-vessel acceptable plane
+ * 1091st and left the optimizer on a two-vessel one.
+ */
+export const NEAR_MISSES = 16;
+export const MARGIN_SLACK_MM = 4;
 
 /**
  * Rank every candidate on `ctx` (the coarse grid). When `fine` is given, the
@@ -127,23 +138,42 @@ export function optimizePlane(
   // stand-in (negative means tumour is kept). The fine re-score below then
   // applies the real cut-surface margin rule.
   const tumor = tumorPoints(judge.grid);
+  // Vessels likewise: the coarse grid's majority vote erases thin vessels
+  // (on the liver case it keeps ~5 % of the vessel voxels), so ranking on it
+  // called planes vessel-free that cut one to three vessels and could leave a
+  // truly vessel-free plane out of the finalists. With the fine grid at hand,
+  // every candidate's crossings are counted there, exactly.
+  const fineVessels = fine !== null;
   const ranked: { n: Vec3; d: number; base: number; s: number }[] = [];
+  const nearMiss: { n: Vec3; d: number; base: number; s: number }[] = [];
   let candidates = 0;
   for (const n of fibonacciCap(n0, CONE_DEG, directions)) {
     const base = baseFor(n);
+    const ds: number[] = [];
+    for (let k = -OFFSET_MM; k <= OFFSET_MM; k++) ds.push(base + k);
+    const crossings = fineVessels ? vesselCrossingsAlong(judge.grid, n, ds, { box: judge.box }) : null;
+    // The tumour's nearest extent along n does not depend on the offset:
+    // once per direction, not once per candidate.
+    let tmin = Infinity;
+    for (let i = 0; i < tumor.length; i += 3) {
+      const v = n[0] * tumor[i] + n[1] * tumor[i + 1] + n[2] * tumor[i + 2];
+      if (v < tmin) tmin = v;
+    }
     for (let k = -OFFSET_MM; k <= OFFSET_MM; k++) {
       const d = base + k;
-      const m = evaluatePlane(ctx, { n, d }, false);
-      if (tumor.length > 0) {
-        let tmin = Infinity;
-        for (let i = 0; i < tumor.length; i += 3) {
-          const v = n[0] * tumor[i] + n[1] * tumor[i + 1] + n[2] * tumor[i + 2];
-          if (v < tmin) tmin = v;
-        }
+      const exact = tumor.length > 0;
+      const m = evaluatePlane(ctx, { n, d }, { locate: false, margin: !exact, vessels: !fineVessels });
+      if (crossings) m.vesselsCrossed = crossings[k + OFFSET_MM];
+      if (exact) {
         m.marginMm = Math.max(0, tmin - d);
         m.tumorIncomplete = tmin - d <= 0;
       }
-      ranked.push({ n, d, base, s: score(m, n, d, n0, base, th) });
+      const sc = score(m, n, d, n0, base, th);
+      ranked.push({ n, d, base, s: sc });
+      if (exact && !m.tumorIncomplete && m.marginMm < th.marginMin && m.marginMm >= th.marginMin - MARGIN_SLACK_MM) {
+        // Scored as if the margin held; the fine grid decides whether it does.
+        nearMiss.push({ n, d, base, s: sc + 1000 });
+      }
       candidates++;
     }
   }
@@ -151,7 +181,12 @@ export function optimizePlane(
 
   // The surgeon's own plane is always in the final round, so the optimizer
   // can never return something that scores worse than doing nothing.
-  const finalists = [{ n: n0, d: d0, base: baseFor(n0) }, ...ranked.slice(0, fine ? RESCORE : 1)];
+  nearMiss.sort((a, b) => b.s - a.s);
+  const finalists = [
+    { n: n0, d: d0, base: baseFor(n0) },
+    ...ranked.slice(0, fine ? RESCORE : 1),
+    ...(fine ? nearMiss.slice(0, NEAR_MISSES) : []),
+  ];
   let best = { n: n0, d: d0, s: -Infinity, m: before };
   for (const c of finalists) {
     const m = evaluatePlane(judge, { n: c.n, d: c.d });

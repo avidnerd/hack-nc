@@ -4,6 +4,7 @@
  */
 
 import { coarseContext, optimizePlane } from './optimize.ts';
+import { vesselCrossingsAlong } from './vessels.ts';
 import type { EngineContext } from './engine.ts';
 import type { CoarseGrid } from './volume.ts';
 import type { Plane, Thresholds } from '../types.ts';
@@ -29,6 +30,9 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     const names = new Map(msg.names);
     ctx = coarseContext(msg.grid, names);
     fine = { grid: msg.fine, box: msg.fineBox, names };
+    // Build the fine-grid vessel tables now, while the case loads, so the
+    // first "optimize" does not pay for them.
+    vesselCrossingsAlong(fine.grid, [1, 0, 0], [0], { box: fine.box });
     return;
   }
   if (!ctx) {

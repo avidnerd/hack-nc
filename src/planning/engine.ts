@@ -31,16 +31,32 @@ export function contextFrom(grid: PlanningGrid): EngineContext {
   };
 }
 
+export interface EvalOptions {
+  /** Also find where the margin is, for the drawn line (default true). */
+  locate?: boolean;
+  /** Compute the cut-surface margin (default true). */
+  margin?: boolean;
+  /** Count vessels crossed (default true). */
+  vessels?: boolean;
+}
+
 /**
- * `locate` also finds where the margin is (for the drawn line); the
- * optimizer's thousands of ranking evaluations turn it off.
+ * The optimizer's thousands of ranking evaluations turn off what they
+ * compute better themselves: the margin line, the margin (an exact
+ * plane-to-tumour distance instead) and vessels (counted on the fine grid).
  */
-export function evaluatePlane(ctx: EngineContext, plane: Plane, locate = true): PlanMetrics {
+export function evaluatePlane(ctx: EngineContext, plane: Plane, opts: EvalOptions = {}): PlanMetrics {
+  const { locate = true, margin = true, vessels = true } = opts;
   const g = ctx.grid;
 
   const r = computeRemnant(g, plane);
-  const m = computeMargin(g, plane, r.tumorKeptVoxels, locate);
-  const v = computeVessels(g, plane, { box: ctx.box });
+  const m = margin
+    ? computeMargin(g, plane, r.tumorKeptVoxels, locate)
+    : { marginMm: 0, tumorIncomplete: r.tumorKeptVoxels > 0, noTumor: g.tumorIdx.length === 0, closest: null };
+  // The optimizer's ranking counts vessels itself, on the fine grid.
+  const v = vessels
+    ? computeVessels(g, plane, { box: ctx.box })
+    : { crossed: 0, cuts: [], largestId: 0, largestVoxels: 0, nearestMm: Infinity, nearestId: 0 };
 
   return {
     remnantPct: r.remnantPct,
