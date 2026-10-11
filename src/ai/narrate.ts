@@ -27,7 +27,12 @@ export function optimizeReason(res: OptimizeResult, before: PlanMetrics, after: 
       ? `Moved ${r0(res.angleDeg)} degrees`
       : `Moved ${r0(res.offsetMm)} millimeters`;
   let why: string;
-  if (res.vessel && before.vesselsCrossed > after.vesselsCrossed) why = `to clear the ${res.vessel.toLowerCase()}`;
+  if (res.vessel && before.vesselsCrossed > after.vesselsCrossed) {
+    why =
+      after.vesselsCrossed === 0
+        ? `to clear the ${res.vessel.toLowerCase()}`
+        : `to cross fewer vessels, ${before.vesselsCrossed} down to ${after.vesselsCrossed}`;
+  }
   else if (before.tumorIncomplete) why = 'to take the whole tumor';
   else if (before.marginMm < th.marginMin && after.marginMm > before.marginMm) why = 'to widen the margin';
   else if (after.remnantPct > before.remnantPct) why = 'to spare more liver';
@@ -42,7 +47,10 @@ function constraintFailure(m: PlanMetrics, th: Thresholds): string {
   if (m.tumorIncomplete) return 'Tumor is still not fully resected.';
   if (m.marginMm < th.marginMin) return `Margin is under ${th.marginMin} millimeters.`;
   if (m.remnantPct < th.remnantMin) return `Remnant is under ${th.remnantMin} percent.`;
-  if (m.vesselsCrossed > 0) return `It still crosses ${m.vesselsCrossed} vessel${m.vesselsCrossed > 1 ? 's' : ''}.`;
+  if (m.vesselsCrossed > 0) {
+    const v = m.vesselsCrossed;
+    return `It still crosses ${v} vessel${v > 1 ? 's' : ''}: I found no cut within ${CONE_DEG} degrees that keeps your margin and remnant and avoids ${v > 1 ? 'them' : 'it'}.`;
+  }
   return 'Every constraint is met.';
 }
 

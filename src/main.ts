@@ -654,7 +654,7 @@ function namedCutIntent(orientation: Orientation, through: string | null, offset
     ? { n: [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0] as Vec3, d: centre }
     : subject === 'renal_arteries'
       ? renalLevelCut(data)
-      : namedCut(data, orientation, idsFor(data, subject), offsetMm, (pl) => evaluatePlane(ctx, pl, false).remnantPct);
+      : namedCut(data, orientation, idsFor(data, subject), offsetMm, (pl) => evaluatePlane(ctx, pl, { locate: false, vessels: false }).remnantPct);
   if (!plane) {
     say(`No ${subject.replace('_', ' ')} in this case.`);
     return;

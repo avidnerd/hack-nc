@@ -97,7 +97,7 @@ const liver: CaseData | null = existsSync(resolve(dir, 'meta.json'))
 describe.skipIf(!liver)('on the real liver', () => {
   it('"sagittal cut 10 mm from the tumour" gives a ~10 mm margin and keeps the larger side', () => {
     const ctx = contextFrom(new PlanningGrid(liver!));
-    const p = namedCut(liver!, 'sagittal', idsFor(liver!, 'tumor'), 10, (pl) => evaluatePlane(ctx, pl, false).remnantPct)!;
+    const p = namedCut(liver!, 'sagittal', idsFor(liver!, 'tumor'), 10, (pl) => evaluatePlane(ctx, pl, { locate: false, vessels: false }).remnantPct)!;
     const m = evaluatePlane(ctx, p);
     expect(m.tumorIncomplete).toBe(false);
     // The planning grid is 2 mm, so the margin lands within a voxel of 10.
