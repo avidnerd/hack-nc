@@ -18,8 +18,12 @@ import * as THREE from 'three';
 import { intentFromLlm } from './ai/intentFallback.ts';
 import { llmName } from './ai/llm.ts';
 import {
+  changeLine,
+  optimizeExplanation,
   optimizeReason,
   patientCallouts,
+  planSummary,
+  shiftReply,
   patientNarrationText,
   planMarkdown,
   type PatientFacts,
@@ -65,11 +69,12 @@ import {
 } from './state.ts';
 import { Guide } from './ui/guide.ts';
 import { Hud } from './ui/hud.ts';
-import { parseIntent, type Intent } from './voice/intents.ts';
+import { parseIntent, stripWake, type Intent } from './voice/intents.ts';
 import { SpeechInput } from './voice/stt.ts';
 import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
-import type { CaseData, Plane, PresetName, Vec3 } from './types.ts';
+import { OFFSET_MM, type OptimizeResult } from './planning/optimize.ts';
+import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
 
 /* ------------------------------------------------------------------ globals */
 
@@ -390,6 +395,7 @@ async function loadCaseData(data: CaseData, id: string): Promise<void> {
   set('focus', []);
   set('viewSection', false);
   set('ghostPlane', null);
+  resetPlanHistory();
 
   // Apply the case's own defaults before the first frame is drawn.
   state.preset = data.meta.defaultPreset;
@@ -577,14 +583,75 @@ function tweenCamera(to: Partial<CameraState>, ms = 700): void {
 
 /* ---------------------------------------------------------------- optimize */
 
-async function optimizePlan(): Promise<void> {
+/** A what-if answer waiting for "do it": the outlined cut and the limits it was found under. */
+let preview: { plane: Plane; marginMin?: number; remnantMin?: number } | null = null;
+/** My changes to the cut (optimize, "do it", a spoken shift), newest last, for "undo". */
+const planeUndo: { from: Plane; to: Plane }[] = [];
+/** The last search, for "why". */
+let lastOptimize: { res: OptimizeResult; th: Thresholds; priority: OptimizePriority } | null = null;
+
+/** True when `a` and `b` are the same cut, within display precision. */
+function samePlane(a: Plane, b: Plane): boolean {
+  return Math.abs(a.d - b.d) < 0.5 && Math.abs(a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2]) > 0.9999;
+}
+
+function currentPlane(): Plane {
+  return { n: [...state.plane.n] as Vec3, d: state.plane.d };
+}
+
+function clearPreview(): void {
+  if (!preview) return;
+  preview = null;
+  set('ghostPlane', null);
+}
+
+function resetPlanHistory(): void {
+  clearPreview();
+  planeUndo.length = 0;
+  lastOptimize = null;
+}
+
+/** Animate the cut to `to`, remembering where it was for "undo". */
+function movePlane(to: Plane, ms = 800): void {
+  planeUndo.push({ from: currentPlane(), to });
+  if (planeUndo.length > 20) planeUndo.shift();
+  planeTween = { from: currentPlane(), to, start: performance.now(), ms };
+}
+
+/** How a what-if was put, for the opening of its answer. */
+function askPhrase(req: Extract<Intent, { kind: 'optimize' }>, marginMin: number, remnantMin: number): string {
+  const parts: string[] = [];
+  if (req.marginMm !== undefined || req.widen) parts.push(`with a ${marginMin} millimeter margin`);
+  if (req.remnantPct !== undefined) parts.push(`keeping ${remnantMin} percent`);
+  if (req.priority === 'vessels') parts.push('sparing the vessels');
+  if (req.priority === 'remnant') parts.push('keeping the most liver');
+  const s = parts.length ? parts.join(' and ') : 'searching near your cut';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise<void> {
   if (!engine || !state.plane.on) {
     say('Show me a cut first.');
     return;
   }
-  const start: Plane = { n: [...state.plane.n] as Vec3, d: state.plane.d };
+  const start = currentPlane();
+  const now = evaluatePlane(engine, start, { locate: false });
+  const priority: OptimizePriority = req.priority ?? 'balanced';
+  let marginMin = req.marginMm ?? state.thresholds.marginMin;
+  // "A bigger margin": 5 mm more than the cut has now, never below the target.
+  if (req.widen) marginMin = Math.max(marginMin, Math.ceil(now.tumorIncomplete ? 0 : now.marginMm) + 5);
+  const remnantMin = req.remnantPct ?? state.thresholds.remnantMin;
+  const th: Thresholds = { ...state.thresholds, marginMin, remnantMin, priority };
+  const newLimits = marginMin !== state.thresholds.marginMin || remnantMin !== state.thresholds.remnantMin;
+  // An order changes the targets for good; a what-if only borrows them.
+  if (!req.preview && newLimits) {
+    patch('thresholds', { marginMin, remnantMin });
+    hud.syncNumbers();
+  }
+  clearPreview();
+
   const t0 = performance.now();
-  const res = await optimizer.run(start, state.thresholds);
+  const res = await optimizer.run(start, th);
   const ms = performance.now() - t0;
   patch('perf', { optimizeMs: Math.round(ms) });
   console.info(`[optimize] ${res?.candidates ?? 0} candidates, search ${res?.ms.toFixed(0)} ms, round trip ${ms.toFixed(0)} ms`);
@@ -596,11 +663,158 @@ async function optimizePlan(): Promise<void> {
   // the 128^3 grid, exactly like every other number on screen.
   const before = evaluatePlane(engine, start);
   const after = evaluatePlane(engine, res.plane);
-  planeTween = { from: start, to: res.plane, start: performance.now(), ms: 800 };
-  const line = optimizeReason(res, before, after, state.thresholds);
-  if (res.feasible) speech.chord();
+  lastOptimize = { res: { ...res, before, after }, th, priority };
+  const moved = res.angleDeg >= 0.5 || res.offsetMm >= 0.5;
+  const line = optimizeReason(res, before, after, th, {
+    preview: req.preview,
+    priority,
+    ...(req.preview ? { ask: askPhrase(req, marginMin, remnantMin) } : {}),
+  });
+  if (req.preview) {
+    if (moved) {
+      preview = { plane: res.plane, ...(newLimits ? { marginMin, remnantMin } : {}) };
+      set('ghostPlane', res.plane);
+    }
+  } else {
+    if (moved) movePlane(res.plane);
+    if (res.feasible) speech.chord();
+    toast('Planar approximation: real resections follow Couinaud segments', 'info');
+  }
   say(line);
-  toast('Planar approximation: real resections follow Couinaud segments', 'info');
+}
+
+/** "Move the cut 5 mm closer to the tumor" (or, as a question, outline it). */
+function shiftPlane(mm: number, previewOnly: boolean): void {
+  if (!engine || !state.plane.on) {
+    say('Show me a cut first.');
+    return;
+  }
+  if (!previewOnly && state.plane.locked) {
+    say('The cut is locked. Say "unlock" first.');
+    return;
+  }
+  const from = currentPlane();
+  // The resected side is n.x - d > 0, where the tumour is: a larger d moves
+  // the cut toward it.
+  const to: Plane = { n: from.n, d: from.d + mm };
+  const before = evaluatePlane(engine, from, { locate: false });
+  const after = evaluatePlane(engine, to, { locate: false });
+  clearPreview();
+  if (previewOnly) {
+    preview = { plane: to };
+    set('ghostPlane', to);
+  } else {
+    movePlane(to, 500);
+  }
+  say(shiftReply(mm, before, after, previewOnly));
+}
+
+function applyPreview(): void {
+  const p = preview;
+  if (!p || !engine) {
+    say('Nothing to apply. Ask a what-if first, like "what if the margin were 15 millimeters".');
+    return;
+  }
+  clearPreview();
+  if (p.marginMin !== undefined || p.remnantMin !== undefined) {
+    patch('thresholds', {
+      ...(p.marginMin !== undefined ? { marginMin: p.marginMin } : {}),
+      ...(p.remnantMin !== undefined ? { remnantMin: p.remnantMin } : {}),
+    });
+    hud.syncNumbers();
+  }
+  const before = evaluatePlane(engine, currentPlane(), { locate: false });
+  const after = evaluatePlane(engine, p.plane, { locate: false });
+  movePlane(p.plane);
+  say(`Done: ${changeLine(before, after)}.`);
+}
+
+function undoPlane(): void {
+  const last = planeUndo.at(-1);
+  if (!last || !engine) {
+    copilot.previousView();
+    return;
+  }
+  // Undo reverses my change only while it is still the cut on screen; a cut
+  // the surgeon has since moved by hand is theirs.
+  if (!samePlane(last.to, planeTween?.to ?? currentPlane())) {
+    planeUndo.length = 0;
+    say('Nothing to undo: the cut is where you last put it.');
+    return;
+  }
+  planeUndo.pop();
+  const prev = last.from;
+  clearPreview();
+  const before = evaluatePlane(engine, currentPlane(), { locate: false });
+  const after = evaluatePlane(engine, prev, { locate: false });
+  planeTween = { from: currentPlane(), to: prev, start: performance.now(), ms: 700 };
+  say(`Back to your previous cut: ${changeLine(before, after)}.`);
+}
+
+function explainPlan(about?: 'margin' | 'remnant' | 'vessels'): void {
+  const m = state.metrics;
+  if (!engine || !state.plane.on || !m) {
+    say('There is no cut yet.');
+    return;
+  }
+  if (about === 'vessels') {
+    // What it would take to avoid them is exactly the vessels-first search.
+    if (m.vesselsCrossed === 0) say('The cut crosses no vessels.');
+    else void optimizePlan({ kind: 'optimize', priority: 'vessels', preview: true });
+    return;
+  }
+  if (about) {
+    say(limitAnalysis(about, m));
+    return;
+  }
+  // "Why" is about the last optimize only while its cut is still the one on
+  // screen (or on its way there).
+  const shown = planeTween?.to ?? currentPlane();
+  if (lastOptimize && samePlane(lastOptimize.res.plane, shown)) {
+    say(optimizeExplanation(lastOptimize.res, lastOptimize.th, lastOptimize.priority));
+  } else {
+    say(`I haven't moved this cut. ${planSummary(m, state.thresholds)}`);
+  }
+}
+
+/**
+ * What bounds the margin (or the remnant) on the cut as it is: slide it 1 mm
+ * at a time away from the tumour (toward it, for the remnant) and report the
+ * first thing that gives, so the answer names a real trade-off.
+ */
+function limitAnalysis(about: 'margin' | 'remnant', m: PlanMetrics): string {
+  const th = state.thresholds;
+  const from = currentPlane();
+  const dir = about === 'margin' ? -1 : 1;
+  if (about === 'remnant' && (m.tumorIncomplete || m.marginMm < th.marginMin)) {
+    return `The margin is already under your ${th.marginMin} millimeters, so the cut cannot move toward the tumor to keep more liver. A tilted cut may: say "keep more liver".`;
+  }
+  if (about === 'margin' && m.remnantPct < th.remnantMin) {
+    return `The remnant is already under your ${th.remnantMin} percent, so the cut cannot move away from the tumor to widen the margin. A tilted cut may: say "optimize".`;
+  }
+  const mmWords = (k: number) => `${k} millimeter${k === 1 ? '' : 's'}`;
+  const ids = (x: PlanMetrics) => new Set((x.vesselCuts ?? []).map((c) => c.id));
+  const had = ids(m);
+  for (let k = 1; k <= OFFSET_MM; k++) {
+    const x = evaluatePlane(engine!, { n: from.n, d: from.d + dir * k }, { locate: false });
+    const lead =
+      about === 'margin'
+        ? `The margin is the gap from the cut to the tumor's nearest edge, ${Math.round(m.marginMm)} millimeters now. Moving the cut away from the tumor widens it, but ${mmWords(k)} further`
+        : `Moving the cut toward the tumor keeps more liver, but ${mmWords(k)} closer`;
+    if (about === 'remnant' && (x.tumorIncomplete || x.marginMm < th.marginMin)) {
+      return `${lead} the margin falls to ${Math.round(x.marginMm)} millimeters, under your ${th.marginMin}.`;
+    }
+    if (x.vesselsCrossed > m.vesselsCrossed) {
+      const fresh = [...ids(x)].find((id) => !had.has(id));
+      return `${lead} it also crosses the ${fresh ? labelName(fresh) : 'next vessel'}. A tilted cut may do better: ask "what if the margin were ${Math.round(m.marginMm) + 5}".`;
+    }
+    if (about === 'margin' && x.remnantPct < th.remnantMin) {
+      return `${lead} the remnant drops to ${Math.round(x.remnantPct)} percent, under your ${th.remnantMin}.`;
+    }
+  }
+  return about === 'margin'
+    ? `Nothing close: the cut can move ${OFFSET_MM} millimeters further from the tumor without crossing another vessel or going under your remnant. Say "move the cut 5 millimeters away from the tumor".`
+    : `Nothing close: the cut can move ${OFFSET_MM} millimeters toward the tumor and keep your margin. Say "keep more liver".`;
 }
 
 /* ----------------------------------------------------------------- measure */
@@ -693,13 +907,15 @@ function namedCutIntent(orientation: Orientation, through: string | null, offset
 }
 
 /** "What's the margin", "how much liver is left", "which vessels does it cross". */
-function queryIntent(what: 'margin' | 'remnant' | 'vessels'): void {
+function queryIntent(what: 'margin' | 'remnant' | 'vessels' | 'summary'): void {
   const m = state.metrics;
   if (!state.plane.on || !m) {
     say('There is no cut yet.');
     return;
   }
-  if (what === 'margin') {
+  if (what === 'summary') {
+    say(planSummary(m, state.thresholds));
+  } else if (what === 'margin') {
     const min = state.thresholds.marginMin;
     say(
       m.tumorIncomplete
@@ -931,6 +1147,7 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
     }
 
     case 'reset': {
+      resetPlanHistory();
       planeTween = null;
       camTween = null;
       surgeonView = null;
@@ -977,22 +1194,29 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       break;
 
     case 'optimize':
-      // Limits spoken with the request ("within a 30 mm margin") are the
-      // thresholds from now on, exactly as if set on their own.
-      if (intent.marginMm !== undefined || intent.remnantPct !== undefined) {
-        patch('thresholds', {
-          ...(intent.marginMm !== undefined ? { marginMin: intent.marginMm } : {}),
-          ...(intent.remnantPct !== undefined ? { remnantMin: intent.remnantPct } : {}),
-        });
-        hud.syncNumbers();
-      }
       // The aorta case optimizes the stent seat; the liver case, the cut.
       if (state.data?.meta.kind === 'aorta') {
         if (state.stent) stents.optimize();
         else say('Place the stent first.');
       } else if (state.data?.meta.kind === 'scan') {
         say('Optimizing a cut needs a liver segmentation. This scan has none.');
-      } else void optimizePlan();
+      } else void optimizePlan(intent);
+      break;
+
+    case 'shiftPlane':
+      shiftPlane(intent.mm, intent.preview === true);
+      break;
+
+    case 'applyPreview':
+      applyPreview();
+      break;
+
+    case 'undo':
+      undoPlane();
+      break;
+
+    case 'explain':
+      explainPlan(intent.about);
       break;
 
     case 'measure':
@@ -1022,7 +1246,9 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       break;
 
     case 'confirm':
-      copilot.confirm();
+      // "Yes" after a what-if means "do it", unless a save is waiting.
+      if (preview && !copilot.confirmPending) applyPreview();
+      else copilot.confirm();
       break;
 
     case 'restorePlan':
@@ -1038,6 +1264,7 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
       break;
 
     case 'cancel':
+      preview = null;
       copilot.cancel();
       break;
 
@@ -1102,7 +1329,18 @@ declare global {
       renderer: VolumeRenderer;
       dispatch: typeof dispatchIntent;
       bench: Bench;
+      /** Feed a transcript as if heard ("scrub, optimize"), for tests without a microphone. */
+      hear: (text: string) => void;
     };
   }
 }
-window.scrub = { state, renderer, dispatch: dispatchIntent, bench };
+window.scrub = {
+  state,
+  renderer,
+  dispatch: dispatchIntent,
+  bench,
+  hear: (text) => {
+    const cmd = stripWake(text);
+    onVoice(cmd ?? text.trim().toLowerCase(), text, true);
+  },
+};

@@ -181,8 +181,19 @@ export interface StentState {
   failReason: string | null;
 }
 
+/**
+ * What the optimizer gives up first when it cannot have everything:
+ * balanced (the spec's weights), vessels (spare every vessel it can, even
+ * below the margin target) or remnant (keep the most liver, roaming further
+ * from the surgeon's cut).
+ */
+export type OptimizePriority = 'balanced' | 'vessels' | 'remnant';
+
 export interface Thresholds {
   marginMin: number;
   remnantMin: number;
   vesselPenalty: 'hard' | 'soft';
+  // DECISION: a per-request priority rides along with the thresholds so it
+  // reaches the worker unchanged; it is never stored in state.thresholds.
+  priority?: OptimizePriority;
 }

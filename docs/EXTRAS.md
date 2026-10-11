@@ -77,6 +77,8 @@ Not built. In order of clinical value per the review:
 | Interface sounds are synthesised with WebAudio instead of shipped files. | `src/voice/tts.ts` |
 | Head-coupled view uses BlazeFace's nose keypoint (230 KB model) rather than the full face mesh. Off unless `VITE_HEAD=1` or `?head=1`. | `src/input/head.ts` |
 | Patient view hides the cut, skin and bone so the whole organ and tumour show; the callouts explain what is removed. | `src/render/anatomy.ts` |
+| The LLM command rescue waits 2.5 s, not 1.5 s: measured Gemini Flash Lite replies land at 1.3–1.6 s. It is async, so nothing waits on it; narration keeps 1.5 s. | `src/ai/intentFallback.ts` |
+| Spoken priorities ("spare the vessels", "keep more liver") reweight the optimizer's score per request; they are not stored as thresholds. | `src/planning/optimize.ts` |
 
 ## Ship TODOs
 

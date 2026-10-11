@@ -35,15 +35,36 @@ export interface OptimizeResult {
   ms: number;
 }
 
+/**
+ * Score weights per priority. Balanced is the spec's formula. "Vessels"
+ * makes one crossed vessel cost more than a missed margin target, keeps the
+ * remnant floor untouchable, and grades the margin shortfall so the cut that
+ * spares the vessels still keeps as much margin as it can. "Remnant" relaxes
+ * the stay-near-the-surgeon terms so the search may roam for more liver.
+ */
+export function weights(th: Thresholds): { margin: number; shortfall: number; remnant: number; vessel: number; stay: number } {
+  const p = th.priority ?? 'balanced';
+  return {
+    margin: 1000,
+    shortfall: p === 'vessels' ? 20 : 0,
+    remnant: p === 'vessels' ? 5000 : 1000,
+    vessel: p === 'vessels' ? 1500 : th.vesselPenalty === 'hard' ? 200 : 20,
+    stay: p === 'remnant' ? 0.05 : 0.3,
+  };
+}
+
 export function score(m: PlanMetrics, n: Vec3, d: number, n0: Vec3, d0: number, th: Thresholds): number {
-  const vesselWeight = th.vesselPenalty === 'hard' ? 200 : 20;
+  const w = weights(th);
   return (
     m.remnantPct -
-    1000 * (m.marginMm < th.marginMin ? 1 : 0) -
-    1000 * (m.remnantPct < th.remnantMin ? 1 : 0) -
-    vesselWeight * m.vesselsCrossed -
-    0.3 * angleDeg(n, n0) -
-    0.3 * Math.abs(d - d0)
+    // Leaving tumour behind is never a trade-off.
+    10000 * (m.tumorIncomplete ? 1 : 0) -
+    w.margin * (m.marginMm < th.marginMin ? 1 : 0) -
+    w.shortfall * Math.max(0, th.marginMin - m.marginMm) -
+    w.remnant * (m.remnantPct < th.remnantMin ? 1 : 0) -
+    w.vessel * m.vesselsCrossed -
+    w.stay * angleDeg(n, n0) -
+    w.stay * Math.abs(d - d0)
   );
 }
 
@@ -172,7 +193,7 @@ export function optimizePlane(
       ranked.push({ n, d, base, s: sc });
       if (exact && !m.tumorIncomplete && m.marginMm < th.marginMin && m.marginMm >= th.marginMin - MARGIN_SLACK_MM) {
         // Scored as if the margin held; the fine grid decides whether it does.
-        nearMiss.push({ n, d, base, s: sc + 1000 });
+        nearMiss.push({ n, d, base, s: sc + weights(th).margin });
       }
       candidates++;
     }

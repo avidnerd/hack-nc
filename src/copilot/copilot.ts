@@ -313,6 +313,11 @@ export class Copilot {
     say(r === 'saved' ? 'Saved as the original plan.' : 'An original plan is already saved. Say: Scrub, confirm, to replace it.');
   }
 
+  /** True while a "save" waits for "confirm" to overwrite the original plan. */
+  get confirmPending(): boolean {
+    return this.plans.hasPending();
+  }
+
   confirm(): void {
     say(this.plans.confirm() ? 'Original plan replaced.' : 'Nothing to confirm.');
   }
