@@ -209,5 +209,3 @@ More details are in the [demo script](docs/DEMO_SCRIPT.md), [benchmark notes](do
 # data and limitations
 
 The CT data comes from the Medical Segmentation Decathlon, with additional anatomical labels from TotalSegmentator. See [docs/CLINICAL.md](docs/CLINICAL.md) for data sources, licenses, and the limitations of the planning calculations.
-
-Scrub+ is a hackathon prototype, not a clinically validated medical device.
