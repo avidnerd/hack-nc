@@ -24,11 +24,40 @@ export class CaseLoadError extends Error {
   }
 }
 
-/** Fetch with a progress callback driven by Content-Length. */
-async function fetchBytes(
+// DECISION: the hosted build (scripts/build-web.mjs) ships each binary as a
+// gzipped `<name>.gz` and sets this flag; static hosts do not compress
+// octet-streams, and gzip cuts a case from ~50 MB to ~18 MB. The dev server
+// keeps serving the raw files.
+const GZ_DATA = import.meta.env.VITE_DATA_GZ === '1';
+
+/**
+ * Fetch `<url>.gz` and inflate it. Some hosts send `.gz` files with
+ * `Content-Encoding: gzip`, in which case the browser has already inflated
+ * them, so the gzip magic bytes decide whether there is anything left to do.
+ */
+async function fetchGzipBytes(
   url: string,
   onProgress?: (received: number, total: number) => void,
 ): Promise<Uint8Array> {
+  const bytes = await fetchRawBytes(`${url}.gz`, onProgress);
+  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;
+  const inflated = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(inflated).arrayBuffer());
+}
+
+/** Fetch a case binary, gzipped or raw depending on the build. */
+function fetchBytes(
+  url: string,
+  onProgress?: (received: number, total: number) => void,
+): Promise<Uint8Array> {
+  return GZ_DATA ? fetchGzipBytes(url, onProgress) : fetchRawBytes(url, onProgress);
+}
+
+/** Fetch with a progress callback driven by Content-Length. */
+async function fetchRawBytes(
+  url: string,
+  onProgress?: (received: number, total: number) => void,
+): Promise<Uint8Array<ArrayBuffer>> {
   const res = await fetch(url);
   if (!res.ok) throw new CaseLoadError(`${res.status} ${res.statusText} for ${url}`);
 

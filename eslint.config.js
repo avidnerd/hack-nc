@@ -2,7 +2,8 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'pipeline/**', 'public/**'] },
+  // Generated and built output is not ours to lint: Astro's .astro types, builds.
+  { ignores: ['dist/**', 'web-dist/**', 'node_modules/**', 'pipeline/**', 'public/**', 'site/.astro/**', 'site/dist/**', 'site/node_modules/**'] },
   {
     files: ['**/*.ts'],
     languageOptions: {

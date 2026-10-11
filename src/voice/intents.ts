@@ -135,6 +135,10 @@ const STRUCTURE_ALIASES: Record<string, string> = {
   ivc: 'ivc',
   'i v c': 'ivc',
   cava: 'ivc',
+  spleen: 'spleen',
+  pancreas: 'pancreas',
+  pancreatic: 'pancreas',
+  nodule: 'tumor',
   kidney: 'kidneys',
   kidneys: 'kidneys',
   renal: 'kidneys',
@@ -261,7 +265,8 @@ export function parseIntent(text: string): Intent | null {
 
   /* --- window presets ---------------------------------------------------- */
   if (/\bbone\b/.test(s)) return { kind: 'window', preset: 'bone' };
-  if (/\blung\b/.test(s)) return { kind: 'window', preset: 'lung' };
+  // "lung tumour" is a structure, not the lung window.
+  if (/\blung\b/.test(s) && !/\b(tumou?r|nodule|cancer|lesion)\b/.test(s)) return { kind: 'window', preset: 'lung' };
   if (/\bsoft\b|\bsoft tissue\b/.test(s)) return { kind: 'window', preset: 'soft' };
   if (/\bliver (window|preset)\b/.test(s)) return { kind: 'window', preset: 'liver' };
 

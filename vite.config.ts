@@ -6,10 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
-    // site/ is the separate Astro landing page; its builds lock files in
-    // site/dist that crashed this watcher (EBUSY), and the app never imports it.
-    // A regex, not a glob: the glob missed Windows backslash paths.
-    watch: { ignored: [/[\\/]site[\\/]/] },
+    // Build output never feeds the app: site/ (the Astro landing page),
+    // web-dist/ (the hosted build) and dist/. Their builds lock files that
+    // crashed this watcher (EBUSY) on Windows. A regex, not a glob: the glob
+    // missed Windows backslash paths.
+    watch: { ignored: [/[\\/](site|web-dist|dist)[\\/]/] },
   },
   build: { target: 'es2022', assetsInlineLimit: 0 },
   // Shaders are imported with ?raw so they stay in .glsl files.

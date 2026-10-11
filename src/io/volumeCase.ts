@@ -6,10 +6,12 @@
  *   resampleToCase  reorient to RAS+, resample to an isotropic grid that fits
  *                   the GPU, and encode HU with the pipeline's exact curve
  *                   (pipeline/run.py HU_CURVE / hu_to_u8)
- *   labelTable      what an optional label map's values mean: the MSD liver
- *                   convention (1 liver, 2 tumour) is recognised; any other
- *                   values become generic "Structure k" labels rather than a
- *                   guessed anatomical name
+ *   labelTable      what an optional label map's values mean. The value 1 is
+ *                   the liver in one dataset and the spleen or a tumour in
+ *                   another, so the meaning comes from a named convention
+ *                   (the Medical Segmentation Decathlon's own label tables,
+ *                   chosen from the file name or by the user), never from
+ *                   the values alone; unknown values become "Structure k"
  */
 
 import type { CaseData, CaseMeta, LabelDef, PresetName, Vec3, WindowLevel } from '../types.ts';
@@ -136,30 +138,74 @@ const GENERIC_COLORS: Vec3[] = [
 ];
 
 /**
- * What the label values mean. Only the MSD liver convention is named; we do
- * not guess which organ an arbitrary id is.
+ * Label conventions, from each Medical Segmentation Decathlon task's
+ * dataset.json (checked against the published archives). Tumours always get
+ * the key "tumor" so "measure the tumor" works on any of them. Only the
+ * liver convention turns on liver planning.
  */
-export function labelTable(present: number[]): { labels: LabelDef[]; kind: CaseMeta['kind'] } {
-  const ids = present.filter((v) => v > 0);
-  if (ids.length > 0 && ids.every((v) => v === 1 || v === 2) && ids.includes(1)) {
-    return {
-      kind: 'liver',
-      labels: [
-        { id: 1, key: 'liver', name: 'Liver', color: [0.74, 0.42, 0.36], role: 'organ' },
-        ...(ids.includes(2) ? [{ id: 2, key: 'tumor', name: 'Tumour', color: [1.0, 0.36, 0.2] as Vec3, role: 'tumor' as const }] : []),
-      ],
-    };
-  }
-  return {
-    kind: 'scan',
-    labels: ids.slice(0, 32).map((id, i) => ({
-      id,
-      key: `structure_${id}`,
-      name: `Structure ${id}`,
-      color: GENERIC_COLORS[i % GENERIC_COLORS.length],
-      role: 'context' as const,
-    })),
-  };
+export type Convention = 'liver' | 'pancreas' | 'hepaticvessel' | 'spleen' | 'lung' | 'colon' | 'generic';
+
+type Spec = Pick<LabelDef, 'key' | 'name' | 'role' | 'color'>;
+const TUMOR_COLOR: Vec3 = [1.0, 0.36, 0.2];
+export const CONVENTIONS: Record<Exclude<Convention, 'generic'>, { title: string; labels: Record<number, Spec> }> = {
+  liver: {
+    title: 'Liver (1 liver, 2 tumour)',
+    labels: {
+      1: { key: 'liver', name: 'Liver', role: 'organ', color: [0.74, 0.42, 0.36] },
+      2: { key: 'tumor', name: 'Tumour', role: 'tumor', color: TUMOR_COLOR },
+    },
+  },
+  pancreas: {
+    title: 'Pancreas (1 pancreas, 2 tumour)',
+    labels: {
+      1: { key: 'pancreas', name: 'Pancreas', role: 'context', color: [0.9, 0.72, 0.45] },
+      2: { key: 'tumor', name: 'Pancreatic tumour', role: 'tumor', color: TUMOR_COLOR },
+    },
+  },
+  hepaticvessel: {
+    title: 'Liver vessels (1 vessel, 2 tumour)',
+    labels: {
+      1: { key: 'hepatic_vessels', name: 'Hepatic vessel', role: 'vessel', color: [0.36, 0.74, 0.98] },
+      2: { key: 'tumor', name: 'Liver tumour', role: 'tumor', color: TUMOR_COLOR },
+    },
+  },
+  spleen: {
+    title: 'Spleen (1 spleen)',
+    labels: { 1: { key: 'spleen', name: 'Spleen', role: 'context', color: [0.62, 0.45, 0.7] } },
+  },
+  lung: {
+    title: 'Lung tumour (1 tumour)',
+    labels: { 1: { key: 'tumor', name: 'Lung tumour', role: 'tumor', color: TUMOR_COLOR } },
+  },
+  colon: {
+    title: 'Colon tumour (1 tumour)',
+    labels: { 1: { key: 'tumor', name: 'Colon tumour', role: 'tumor', color: TUMOR_COLOR } },
+  },
+};
+
+/** The convention a file name points to (MSD files are named after their task). */
+export function guessConvention(fileNames: string[]): Convention | null {
+  const n = fileNames.join(' ').toLowerCase();
+  if (/hepatic.?vessel/.test(n)) return 'hepaticvessel';
+  if (/pancrea/.test(n)) return 'pancreas';
+  if (/spleen/.test(n)) return 'spleen';
+  if (/lung|lung_/.test(n)) return 'lung';
+  if (/colon/.test(n)) return 'colon';
+  if (/liver/.test(n)) return 'liver';
+  return null;
+}
+
+/** Name the label values under a convention; anything else stays generic. */
+export function labelTable(present: number[], convention: Convention = 'generic'): { labels: LabelDef[]; kind: CaseMeta['kind'] } {
+  const ids = present.filter((v) => v > 0).slice(0, 32);
+  const named = convention === 'generic' ? {} : CONVENTIONS[convention].labels;
+  const labels = ids.map((id, i): LabelDef => {
+    const spec = named[id];
+    return spec
+      ? { id, ...spec }
+      : { id, key: `structure_${id}`, name: `Structure ${id}`, color: GENERIC_COLORS[i % GENERIC_COLORS.length], role: 'context' };
+  });
+  return { labels, kind: convention === 'liver' && ids.includes(1) ? 'liver' : 'scan' };
 }
 
 /** Distinct values in a label volume, ascending. */
@@ -177,6 +223,7 @@ export async function caseFromNifti(
   ct: NiftiImage,
   labelImg: NiftiImage | null,
   onProgress?: (label: string, f: number) => void,
+  convention: Convention = 'generic',
 ): Promise<CaseData> {
   if (labelImg && labelImg.dims.some((d, i) => d !== ct.dims[i])) {
     throw new Error('The label map has a different grid size from the CT.');
@@ -189,7 +236,7 @@ export async function caseFromNifti(
   let table = labelTable([]);
   if (labelImg) {
     labels = await resample(labelImg, grid, 'nearest', (f) => onProgress?.('Resampling labels', f));
-    table = labelTable(distinctValues(labels));
+    table = labelTable(distinctValues(labels), convention);
     // Values beyond the 32 named ones are cleared rather than drawn unnamed.
     const keep = new Uint8Array(256);
     for (const l of table.labels) keep[l.id] = 1;

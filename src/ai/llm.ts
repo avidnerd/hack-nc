@@ -9,11 +9,13 @@
 
 const TIMEOUT_MS = 1500;
 
-type Provider = 'gemini' | 'anthropic' | 'off';
+type Provider = 'gemini' | 'anthropic' | 'proxy' | 'off';
 
 function provider(): Provider {
   const want = (import.meta.env.VITE_LLM ?? 'gemini').toLowerCase();
   if (want === 'off') return 'off';
+  // The hosted build (scripts/build-web.mjs) ships no key; /api/llm holds it.
+  if (want === 'proxy') return 'proxy';
   if (want === 'anthropic' && import.meta.env.VITE_ANTHROPIC_KEY) return 'anthropic';
   if (import.meta.env.VITE_GEMINI_KEY) return 'gemini';
   if (import.meta.env.VITE_ANTHROPIC_KEY) return 'anthropic';
@@ -35,7 +37,12 @@ export async function complete(system: string, user: string): Promise<string | n
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   const t0 = performance.now();
   try {
-    const text = p === 'gemini' ? await gemini(system, user, ctrl.signal) : await anthropic(system, user, ctrl.signal);
+    const text =
+      p === 'proxy'
+        ? await proxy(system, user, ctrl.signal)
+        : p === 'gemini'
+          ? await gemini(system, user, ctrl.signal)
+          : await anthropic(system, user, ctrl.signal);
     console.info(`[llm] ${p} answered in ${(performance.now() - t0).toFixed(0)} ms`);
     return text;
   } catch (err) {
@@ -46,9 +53,22 @@ export async function complete(system: string, user: string): Promise<string | n
   }
 }
 
+async function proxy(system: string, user: string, signal: AbortSignal): Promise<string | null> {
+  const res = await fetch('/api/llm', {
+    method: 'POST',
+    signal,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ system, user }),
+  });
+  if (!res.ok) throw new Error(`proxy ${res.status}`);
+  const json = (await res.json()) as { text?: string | null };
+  return json.text ?? null;
+}
+
 async function gemini(system: string, user: string, signal: AbortSignal): Promise<string | null> {
   const key = import.meta.env.VITE_GEMINI_KEY as string;
-  const model = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) ?? 'gemini-2.5-flash';
+  // gemini-2.5-flash is closed to new keys; see api/llm.ts for the latency pick.
+  const model = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) ?? 'gemini-3.5-flash-lite';
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
     {
@@ -58,7 +78,7 @@ async function gemini(system: string, user: string, signal: AbortSignal): Promis
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 256 },
+        generationConfig: { temperature: 0, maxOutputTokens: 256, thinkingConfig: { thinkingLevel: 'minimal' } },
       }),
     },
   );

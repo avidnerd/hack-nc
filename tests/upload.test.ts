@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { orientation, readNifti, NiftiError } from '../src/io/nifti.ts';
 import { looksLikeLabels } from '../src/io/upload.ts';
-import { HU_CURVE, MAX_DIM, caseFromNifti, huToU8, labelTable, outputGrid } from '../src/io/volumeCase.ts';
+import { HU_CURVE, MAX_DIM, caseFromNifti, guessConvention, huToU8, labelTable, outputGrid } from '../src/io/volumeCase.ts';
 import { measureStructure } from '../src/planning/anatomyMeasure.ts';
 import { contextFrom, evaluatePlane } from '../src/planning/engine.ts';
 import { PlanningGrid } from '../src/planning/volume.ts';
@@ -63,12 +63,27 @@ describe('scan to case', () => {
     expect(outputGrid([100, 100, 100], 1).spacing).toBe(1);
   });
 
-  it('names only the MSD liver convention; anything else stays generic', () => {
-    expect(labelTable([0, 1, 2]).kind).toBe('liver');
-    expect(labelTable([0, 1, 2]).labels.map((l) => l.key)).toEqual(['liver', 'tumor']);
-    const g = labelTable([0, 3, 7]);
-    expect(g.kind).toBe('scan');
-    expect(g.labels.map((l) => l.name)).toEqual(['Structure 3', 'Structure 7']);
+  it('names labels by convention, never by the values alone', () => {
+    // Value 1 is the liver, the spleen or a tumour depending on the dataset.
+    expect(labelTable([0, 1, 2], 'liver').kind).toBe('liver');
+    expect(labelTable([0, 1, 2], 'liver').labels.map((l) => l.key)).toEqual(['liver', 'tumor']);
+    expect(labelTable([0, 1], 'spleen').labels.map((l) => l.name)).toEqual(['Spleen']);
+    expect(labelTable([0, 1], 'spleen').kind).toBe('scan');
+    expect(labelTable([0, 1], 'lung').labels.map((l) => [l.key, l.role])).toEqual([['tumor', 'tumor']]);
+    expect(labelTable([0, 1, 2], 'pancreas').kind).toBe('scan');
+    // No convention: nothing is called liver.
+    expect(labelTable([0, 1, 2]).labels.map((l) => l.name)).toEqual(['Structure 1', 'Structure 2']);
+    expect(labelTable([0, 1, 2]).kind).toBe('scan');
+    expect(labelTable([0, 3, 7], 'spleen').labels.map((l) => l.name)).toEqual(['Structure 3', 'Structure 7']);
+  });
+
+  it('reads the convention from MSD file names', () => {
+    expect(guessConvention(['spleen_56.nii.gz', 'spleen_56_label.nii.gz'])).toBe('spleen');
+    expect(guessConvention(['lung_057.nii.gz'])).toBe('lung');
+    expect(guessConvention(['hepaticvessel_001.nii.gz'])).toBe('hepaticvessel');
+    expect(guessConvention(['pancreas_004.nii.gz'])).toBe('pancreas');
+    expect(guessConvention(['liver_36.nii.gz'])).toBe('liver');
+    expect(guessConvention(['scan_a.nii.gz', 'scan_a_seg.nii.gz'])).toBeNull();
   });
 
   it('tells a label map from a CT by its voxels', async () => {
@@ -97,13 +112,31 @@ describe('scan to case', () => {
     const inTumor = (i: number, j: number, k: number) => (i - 26) ** 2 + (j - 20) ** 2 + (k - 15) ** 2 < 4 ** 2;
     const ct = await readNifti(buf(makeNifti({ dims, spacing: [1.5, 1.5, 1.5], value: (i, j, k) => (inLiver(i, j, k) ? 60 : -1000) })));
     const lab = await readNifti(buf(makeNifti({ dims, spacing: [1.5, 1.5, 1.5], datatype: 2, value: (i, j, k) => (inTumor(i, j, k) ? 2 : inLiver(i, j, k) ? 1 : 0) })));
-    const c = await caseFromNifti('liver test', ct, lab);
+    const c = await caseFromNifti('liver test', ct, lab, undefined, 'liver');
     expect(c.meta.kind).toBe('liver');
     const g = new PlanningGrid(c);
     expect(g.organIdx.length).toBeGreaterThan(0);
     const m = evaluatePlane(contextFrom(g), { n: [1, 0, 0], d: 28 * 1.5 });
     expect(m.remnantPct).toBeGreaterThan(0);
     expect(m.remnantPct).toBeLessThan(100);
+  });
+});
+
+describe('measuring structures in an uploaded scan', () => {
+  it('measures any named organ, and a missing one is nothing rather than everything', async () => {
+    const dims: [number, number, number] = [30, 30, 30];
+    const inSpleen = (i: number, j: number, k: number) => (i - 15) ** 2 / 100 + (j - 15) ** 2 / 36 + (k - 15) ** 2 / 64 < 1;
+    const ct = await readNifti(buf(makeNifti({ dims, spacing: [1, 1, 1], value: (i, j, k) => (inSpleen(i, j, k) ? 50 : -1000) })));
+    const lab = await readNifti(buf(makeNifti({ dims, spacing: [1, 1, 1], datatype: 2, value: (i, j, k) => (inSpleen(i, j, k) ? 1 : 0) })));
+    const c = await caseFromNifti('spleen test', ct, lab, undefined, 'spleen');
+    const m = measureStructure(c, 'spleen')!;
+    expect(m.title).toBe('Spleen');
+    const vol = parseFloat(m.rows[0].value);
+    expect(Math.abs(vol - (4 / 3) * Math.PI * 10 * 6 * 8 / 1000)).toBeLessThan(0.3);
+    // Previously a missing label looked up as id 0 and selected every
+    // background voxel; now it is simply not measurable.
+    expect(measureStructure(c, 'tumor')).toBeNull();
+    expect(measureStructure(c, 'liver')).toBeNull();
   });
 });
 

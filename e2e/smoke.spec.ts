@@ -137,11 +137,14 @@ test('copilot: ask for anatomy, get the view and the verified measurement', asyn
   await page.evaluate(() => window.scrub!.dispatch({ kind: 'relation', a: 'tumor', b: 'kidney_cyst' }, 'llm'));
   await page.waitForFunction(() => /There is no kidney cyst in this segmentation/.test(window.scrub!.state.response));
   expect(await page.evaluate(() => window.scrub!.state.caliper.mm)).toBe(before);
+  // A known organ this case does not have: said plainly.
+  await say('focus on the spleen');
+  await page.waitForFunction(() => /There is no spleen in this segmentation/.test(window.scrub!.state.response));
   // Words outside the vocabulary never become a command.
   expect(
     await page.evaluate(async () => {
       const url = '/src/voice/intents.ts';
-      return ((await import(/* @vite-ignore */ url)) as typeof import('../src/voice/intents.ts')).parseIntent('focus on the spleen');
+      return ((await import(/* @vite-ignore */ url)) as typeof import('../src/voice/intents.ts')).parseIntent('focus on the gallbladder');
     }),
   ).toBeNull();
 });

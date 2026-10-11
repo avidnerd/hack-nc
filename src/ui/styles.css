@@ -159,6 +159,27 @@ body {
   gap: 16px;
 }
 
+.install-btn {
+  pointer-events: auto;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 260ms var(--ease);
+}
+
+.install-btn:hover {
+  border-color: var(--accent);
+}
+
+.install-btn[hidden] {
+  display: none;
+}
+
 .status {
   display: flex;
   align-items: center;
@@ -1102,4 +1123,51 @@ body.dropping::after {
   font-family: var(--font-display);
   font-size: 20px;
   pointer-events: none;
+}
+
+/* ----------------------------------------------- label convention chooser */
+
+.label-chooser {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(14, 15, 17, 0.85);
+}
+.label-chooser-card {
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.label-chooser-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.label-chooser-sub {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+}
+.label-chooser-card button {
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  cursor: pointer;
+}
+.label-chooser-card button:hover {
+  border-color: var(--accent);
+}
+.label-chooser-card button.other {
+  color: var(--ink-dim);
 }

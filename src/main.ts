@@ -34,6 +34,7 @@ import { fromJson as netFromJson } from './input/gestureNet.ts';
 import { HeadTracker } from './input/head.ts';
 import { installKeyboard } from './input/keyboard.ts';
 import { installMouse, pickOnVolume } from './input/mouseFallback.ts';
+import { installPwa } from './pwa.ts';
 import { contextFrom, evaluatePlane, type EngineContext } from './planning/engine.ts';
 import { OptimizerClient } from './planning/optimizerClient.ts';
 import { planeThrough } from './planning/plane.ts';
@@ -159,6 +160,7 @@ const HEPATIC_TREE_ID = 8;
 
 async function boot(): Promise<void> {
   set('phase', 'loading');
+  installPwa();
 
   const caseId = new URLSearchParams(location.search).get('case') ?? 'liver';
   await switchCase(caseId);
@@ -235,12 +237,12 @@ async function uploadScan(files: File[]): Promise<void> {
       shown = label;
     });
     await loadCaseData(data, 'upload');
-    const n = data.meta.labels.length;
+    const names = data.meta.labels.map((l) => l.name);
     const what =
       data.meta.kind === 'liver'
         ? 'Liver labels found: planning is on.'
-        : n
-          ? `${n} labelled structure${n === 1 ? '' : 's'}, unnamed.`
+        : names.length
+          ? `Labels: ${names.join(', ')}.`
           : 'No labels: viewing, cutting and measuring.';
     say(`Scan loaded. ${what}`);
   } catch (err) {

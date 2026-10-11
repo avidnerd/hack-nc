@@ -9,6 +9,8 @@
     "predev": "node scripts/copy-mediapipe.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:web": "node scripts/build-web.mjs",
+    "smoke:prod": "node --experimental-transform-types scripts/smoke-prod.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

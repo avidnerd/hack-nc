@@ -106,6 +106,12 @@ export function allVisible(view: View, points: Vec3[], fovDeg: number, aspect: n
   });
 }
 
+/** A cutting plane (world mm) through point `p`, facing the camera at `view`. */
+export function sectionThrough(p: Vec3, view: View): Plane {
+  const n = cameraDir(view.yaw, view.pitch);
+  return { n, d: dot(n, p) };
+}
+
 /**
  * A cutting plane (world mm) through the segment a-b that faces the camera at
  * `view`: the near side is cut away, so the CT section shows both endpoints.

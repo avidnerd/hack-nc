@@ -51,7 +51,9 @@ interface Vox {
 /** Voxel index list of one label, or of several. */
 export function voxelsOf(v: Vox, ids: number[]): Int32Array {
   const set = new Uint8Array(256);
-  for (const id of ids) set[id] = 1;
+  // Only real label ids (1..255): 0 is background, and a missing structure
+  // (-1) must select nothing rather than every empty voxel.
+  for (const id of ids) if (id > 0 && id < 256) set[id] = 1;
   let n = 0;
   for (let i = 0; i < v.labels.length; i++) if (set[v.labels[i]]) n++;
   const out = new Int32Array(n);
@@ -266,10 +268,14 @@ export const MEASURABLE = ['tumor', 'liver', 'aorta', 'kidneys', 'kidney_left', 
 
 export function measureStructure(data: CaseData, what: string): Measurement | null {
   const v: Vox = { shape: data.meta.shape, spacing: data.meta.spacing, origin: data.meta.origin, labels: data.labels };
-  const id = (key: string) => data.meta.labels.find((l) => l.key === key)?.id ?? 0;
+  // -1 when the structure is not in this segmentation: it selects no voxels.
+  const id = (key: string) => data.meta.labels.find((l) => l.key === key)?.id ?? -1;
 
   switch (what) {
     case 'tumor': {
+      // Outside a liver case (a lung or colon tumour, say) the liver-surgery
+      // rows do not apply: the generic tumour measurement does.
+      if (data.meta.kind !== 'liver') return measureGeneric(data, v, 'tumor');
       const t = largestComponent(v, voxelsOf(v, [id('tumor')]));
       const ax = axialDiameters(v, t);
       if (!ax) return null;
@@ -292,7 +298,7 @@ export function measureStructure(data: CaseData, what: string): Measurement | nu
     case 'liver': {
       const liver = voxelsOf(v, [id('liver'), id('tumor')]);
       if (liver.length === 0) return null;
-      const tumorN = id('tumor') ? voxelsOf(v, [id('tumor')]).length : 0;
+      const tumorN = voxelsOf(v, [id('tumor')]).length;
       let zlo = Infinity;
       let zhi = -Infinity;
       let pa: Vec3 = [0, 0, 0];
@@ -400,7 +406,7 @@ export function measureStructure(data: CaseData, what: string): Measurement | nu
     case 'portal_vein': {
       const pv = voxelsOf(v, [id('portal_vein')]);
       const liverId = id('liver');
-      if (pv.length === 0 || !liverId) return null;
+      if (pv.length === 0 || liverId < 0) return null;
       // The trunk near the hilum: portal voxels within ~20 mm of the liver,
       // which leaves out the splenic vein that shares the label.
       const liver = voxelsOf(v, [liverId]);
@@ -477,6 +483,47 @@ export function measureStructure(data: CaseData, what: string): Measurement | nu
     }
 
     default:
-      return null;
+      return measureGeneric(data, v, what);
   }
+}
+
+/**
+ * Any other named structure (an uploaded spleen, pancreas, lung tumour...):
+ * tumours get the RECIST diameters, organs their volume and dimensions. No
+ * reference range is shown, because none has been checked for it here.
+ */
+function measureGeneric(data: CaseData, v: Vox, key: string): Measurement | null {
+  const label = data.meta.labels.find((l) => l.key === key);
+  if (!label) return null;
+  const idx = largestComponent(v, voxelsOf(v, [label.id]));
+  if (idx.length === 0) return null;
+  const vol = volumeMl(v, idx.length);
+  if (label.role === 'tumor') {
+    const ax = axialDiameters(v, idx);
+    if (!ax) return null;
+    return {
+      title: label.name,
+      rows: [
+        { label: 'Longest axial diameter', value: mm(ax.long), ref: 'RECIST 1.1 target lesion: ≥10 mm on CT' },
+        { label: 'Short axis (same slice)', value: mm(ax.short) },
+        { label: 'Volume', value: `${vol.toFixed(1)} mL` },
+      ],
+      notes: [`Edge to edge on a ${v.spacing[0].toFixed(1)} mm grid.`],
+      speech: `${label.name} ${Math.round(ax.long)} by ${Math.round(ax.short)} millimeters, ${vol.toFixed(vol < 10 ? 1 : 0)} milliliters.`,
+      caliper: { a: ax.a, b: ax.b, mm: ax.long },
+    };
+  }
+  const pl = principalLength(v, idx);
+  const z = zExtent(v, idx);
+  return {
+    title: label.name,
+    rows: [
+      { label: 'Volume', value: ml(vol) },
+      ...(pl ? [{ label: 'Longest dimension', value: mm(pl.len) }] : []),
+      { label: 'Top-to-bottom extent', value: mm(z) },
+    ],
+    notes: ['No reference range is shown for this structure.'],
+    speech: `${label.name} ${Math.round(vol)} milliliters${pl ? `, ${Math.round(pl.len / 10)} centimeters long` : ''}.`,
+    caliper: pl ? { a: pl.a, b: pl.b, mm: pl.len } : null,
+  };
 }
