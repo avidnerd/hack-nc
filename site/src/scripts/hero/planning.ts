@@ -26,6 +26,6 @@ export function makePlanner(data: HeroData): LivePlanner {
   const buildMs = performance.now() - t0;
   return {
     buildMs,
-    evaluate: (n, d) => evaluatePlane(ctx, { n, d } as Plane, false),
+    evaluate: (n, d) => evaluatePlane(ctx, { n, d } as Plane, { locate: false }),
   };
 }
