@@ -1,8 +1,9 @@
 # Scrub+
+WINNER (General 1st Place) of HackNC 2026 :)
 
 ![Scrub showing a gesture-controlled cut through a liver CT](docs/shots/live-cut.png)
 
-my submission for HackNC 2026 :)
+
 
 > rethinking how surgeons interact with medical imaging, without touching a computer.
 
