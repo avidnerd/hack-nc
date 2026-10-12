@@ -205,7 +205,7 @@ More details are in the [demo script](docs/DEMO_SCRIPT.md), [benchmark notes](do
 
 # try it out
 
-- [GitHub repository](https://github.com/avidnerd/hack-nc)
+- [website](https://scrubplus.vercel.app)
 
 # data and limitations
 
