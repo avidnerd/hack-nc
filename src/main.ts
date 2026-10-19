@@ -76,6 +76,7 @@ import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
 import { OFFSET_MM, score, type OptimizeResult } from './planning/optimize.ts';
 import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
+import { askAgent } from './ai/agentClient.ts';
 
 /* ------------------------------------------------------------------ globals */
 
@@ -1533,6 +1534,8 @@ declare global {
       bench: Bench;
       /** Feed a transcript as if heard ("scrub, optimize"), for tests without a microphone. */
       hear: (text: string) => void;
+      /** Ask the v2 agent backend (M0 check): returns the validated tool calls. */
+      agent: typeof askAgent;
     };
   }
 }
@@ -1545,4 +1548,5 @@ window.scrub = {
     const cmd = stripWake(text);
     onVoice(cmd ?? text.trim().toLowerCase(), text, true);
   },
+  agent: askAgent,
 };

@@ -25,3 +25,7 @@ CLAUDE.md
 realistic_surgical_glove_with_folds_texture.zip
 
 .vercel
+
+# v2 backend
+backend/.venv/
+.pytest_cache/

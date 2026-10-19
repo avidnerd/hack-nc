@@ -1,0 +1,191 @@
+{
+  "$comment": "Single source of the agent tool schemas (OpenAI function-calling format). Read by backend/app/tools.py and src/ai/tools.ts. Keep in sync with CLAUDE.md section 4.1. Axes are patient axes: x = right to left, y = anterior to posterior, z = inferior to superior (mm, world space).",
+  "version": 1,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_state",
+        "description": "Current case id, mode, plane (normal n and offset d in mm), stent state, thresholds and visible structures.",
+        "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "measure",
+        "description": "Measure one quantity on the current plan. distance needs a and b (structure ids).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "what": { "type": "string", "enum": ["flr", "margin", "vessels_crossed", "tumor_volume", "neck_length", "neck_diameter", "distance"] },
+            "a": { "type": "string", "description": "First structure id, for distance." },
+            "b": { "type": "string", "description": "Second structure id, for distance." }
+          },
+          "required": ["what"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "set_plane",
+        "description": "Move the cutting plane. Give normal and d for an absolute plane, or rotate_deg and/or offset_mm to move it relative to where it is.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "normal": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+            "d": { "type": "number", "description": "Plane offset in mm: points x with dot(normal, x) - d > 0 are resected." },
+            "rotate_deg": {
+              "type": "object",
+              "properties": {
+                "axis": { "type": "string", "enum": ["x", "y", "z"] },
+                "deg": { "type": "number", "minimum": -90, "maximum": 90 }
+              },
+              "required": ["axis", "deg"],
+              "additionalProperties": false
+            },
+            "offset_mm": { "type": "number", "minimum": -100, "maximum": 100, "description": "Shift along the normal; positive moves toward the resected side." }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "optimize_plane",
+        "description": "Search planes near the current one for the best cut that meets the margin and remnant thresholds and avoids the listed structures.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "margin_min_mm": { "type": "number", "minimum": 0, "maximum": 50 },
+            "flr_min_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+            "avoid": { "type": "array", "items": { "type": "string" } },
+            "max_rotate_deg": { "type": "number", "minimum": 0, "maximum": 90 },
+            "max_offset_mm": { "type": "number", "minimum": 0, "maximum": 100 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "place_stent",
+        "description": "Place an aortic stent graft on the centerline. s0_mm is the proximal end, measured along the centerline from its top.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "device_id": { "type": "string" },
+            "s0_mm": { "type": "number", "minimum": 0 },
+            "length_mm": { "type": "number", "minimum": 20, "maximum": 250 }
+          },
+          "required": ["device_id"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "optimize_stent",
+        "description": "Find the nearest proximal position where the device seals, or report the rule that cannot be met.",
+        "parameters": {
+          "type": "object",
+          "properties": { "device_id": { "type": "string" } },
+          "required": ["device_id"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "set_threshold",
+        "description": "Change a planning threshold.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "enum": ["margin_min_mm", "flr_min_pct"] },
+            "value": { "type": "number", "minimum": 0, "maximum": 100 }
+          },
+          "required": ["name", "value"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "show",
+        "description": "Highlight, isolate or hide structures.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "structure_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "mode": { "type": "string", "enum": ["highlight", "isolate", "hide"] }
+          },
+          "required": ["structure_ids", "mode"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "window",
+        "description": "Set the CT window preset.",
+        "parameters": {
+          "type": "object",
+          "properties": { "preset": { "type": "string", "enum": ["liver", "soft", "bone", "lung"] } },
+          "required": ["preset"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "resect",
+        "description": "Resect along the current plane. Returns resected volume (mL) and remaining FLR (%).",
+        "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "segment_point",
+        "description": "Segment the structure at a point with VISTA-3D. Returns a new structure id, its volume (mL) and a label guess.",
+        "parameters": {
+          "type": "object",
+          "properties": { "xyz_mm": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 } },
+          "required": ["xyz_mm"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "lookup_device_rules",
+        "description": "Look up a stent graft's sizing rules from its instructions for use, with source URLs.",
+        "parameters": {
+          "type": "object",
+          "properties": { "device_name": { "type": "string" } },
+          "required": ["device_name"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write_plan",
+        "description": "Write the structured plan for the current case.",
+        "parameters": { "type": "object", "properties": {}, "additionalProperties": false }
+      }
+    }
+  ]
+}
