@@ -32,3 +32,4 @@ backend/.venv/
 distill/data/traces_*.jsonl
 distill/data/sft_*.jsonl
 distill/data/eval_*.jsonl
+.claude/worktrees/
