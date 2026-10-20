@@ -42,6 +42,7 @@ export const SHORTCUT_HELP: [string, string][] = [
   ['Shift+G', 'teach gestures (labelled recording)'],
   ['V', 'webcam preview'],
   ['F', 'fullscreen'],
+  ['/', 'command palette: type a request for the agent'],
   ['?', 'this overlay'],
 ];
 
@@ -59,6 +60,8 @@ export interface KeyboardHooks {
   tutorial: () => void;
   /** Opens the CT upload picker (`I`, for import). */
   upload: () => void;
+  /** Opens the typed command palette (`/`). */
+  palette: () => void;
 }
 
 export function installKeyboard(hooks: KeyboardHooks): void {
@@ -192,8 +195,11 @@ export function installKeyboard(hooks: KeyboardHooks): void {
         void toggleFullscreen();
         break;
       case '?':
-      case '/':
         set('showHelp', !state.showHelp);
+        break;
+      case '/':
+        if (state.showHelp) set('showHelp', false);
+        hooks.palette();
         break;
       case 'Escape':
         if (state.showHelp) set('showHelp', false);

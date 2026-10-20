@@ -21,6 +21,8 @@ import {
   ostiaOnCenterline,
   placeStent,
   preferredStart,
+  sizeAt,
+  STENT_LENGTH_MM,
   type Ostium,
 } from './stent.ts';
 
@@ -55,6 +57,11 @@ export class StentSession {
 
   get centerline(): Centerline | null {
     return this.cl;
+  }
+
+  /** Renal ostia as arc lengths on the centerline (for the agent's rule breakdown). */
+  get renalOstia(): Ostium[] {
+    return this.ostia;
   }
 
   setCase(data: CaseData, f: Frame): void {
@@ -106,6 +113,26 @@ export class StentSession {
         ? `Placed. Neck ${Math.round(st.neckMm)} millimeters. Seals.`
         : `Placed. Won't seal. ${st.failReason}.`,
     );
+  }
+
+  /**
+   * The agent's place_stent: with no s0, exactly the spoken "place the stent";
+   * with s0, the device sized for that seat and left there, sealing or not.
+   */
+  placeAt(s0?: number, lengthMm = STENT_LENGTH_MM): StentState | null {
+    if (this.kind !== 'aorta' || !this.cl) return null;
+    const len = clamp(lengthMm, 20, this.cl.length);
+    let st: StentState;
+    if (s0 === undefined) {
+      st = placeStent(this.cl, this.ostia, preferredStart(this.ostia, FALLBACK_S0), len);
+    } else {
+      const at = clamp(s0, 0, maxStart(this.cl, len));
+      st = evaluateStent(this.cl, this.ostia, at, sizeAt(this.cl, at), len);
+    }
+    this.anim = null;
+    this.apply(st);
+    say(st.seals ? `Placed. Neck ${Math.round(st.neckMm)} millimeters. Seals.` : `Placed. Won't seal. ${st.failReason}.`);
+    return st;
   }
 
   /** Put a saved stent back exactly (restoring a plan); null removes it. */

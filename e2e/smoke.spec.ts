@@ -5,7 +5,7 @@
  * keyboard fallbacks for the other three moments.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
 
 // window.scrub is declared by src/main.ts, which tsconfig includes.
 

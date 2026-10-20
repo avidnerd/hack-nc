@@ -272,8 +272,20 @@ export function toast(text: string, tone: ToastTone = 'info'): void {
   emit('toast', { text, tone });
 }
 
+/**
+ * While the agent runs a turn its tools reuse the voice code paths, which
+ * narrate every step. Those lines are held back so the screen and the
+ * speaker carry one answer: the agent's grounded reply.
+ */
+let quietDepth = 0;
+
+export function quietSay(on: boolean): void {
+  quietDepth = Math.max(0, quietDepth + (on ? 1 : -1));
+}
+
 /** Record a spoken response so the HUD can echo what the voice just said. */
 export function say(text: string): void {
+  if (quietDepth > 0) return;
   set('response', text);
 }
 

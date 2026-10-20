@@ -1173,3 +1173,212 @@ body.dropping::after {
 .label-chooser-card button.other {
   color: var(--ink-dim);
 }
+
+/* ------------------------------------------- agent: palette, counter, log */
+
+.grounding {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.grounding[hidden] {
+  display: none;
+}
+
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 14vh 16px 16px;
+  background: rgba(14, 15, 17, 0.6);
+}
+.palette[hidden] {
+  display: none;
+}
+.palette-card {
+  width: min(560px, 100%);
+  padding: 14px 16px 12px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  position: relative;
+  overflow: hidden;
+}
+/* The loading state: a thin accent line sweeping along the top edge. */
+.palette.busy .palette-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 2px;
+  background: var(--accent);
+  animation: palette-sweep 1.1s var(--ease) infinite;
+}
+@keyframes palette-sweep {
+  to {
+    left: 100%;
+  }
+}
+.palette-input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  padding: 9px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  user-select: text;
+}
+.palette-input:focus {
+  border-color: var(--accent-dim);
+}
+.palette-input:disabled {
+  color: var(--ink-dim);
+}
+.palette-status {
+  min-height: 1.4em;
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.palette-label {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.palette-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.palette-suggestion {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.palette-suggestion:hover,
+.palette-suggestion:focus-visible {
+  color: var(--ink);
+  border-color: var(--accent-dim);
+  outline: none;
+}
+.palette.busy .palette-suggestion {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.palette-foot {
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+
+.hood {
+  position: fixed;
+  right: 20px;
+  top: 56px;
+  z-index: 35;
+  width: min(340px, calc(100vw - 32px));
+  max-height: min(60vh, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+}
+.hood[hidden] {
+  display: none;
+}
+.hood-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--panel-line);
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.hood-close {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.hood-close:hover {
+  color: var(--ink);
+}
+.hood-empty {
+  padding: 12px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.hood-empty[hidden] {
+  display: none;
+}
+.hood-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  user-select: text;
+}
+.hood-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.hood-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hood-model {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hood-meta {
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hood-text {
+  color: var(--ink-dim);
+  margin-top: 2px;
+}
+.hood-tools {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.hood-verdict {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.hood-verdict.bad {
+  color: var(--amber);
+}
