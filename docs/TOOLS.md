@@ -1,0 +1,23 @@
+# Agent tool results
+
+What each tool in `shared/tools.json` returns. The Python executor (`backend/app/engine/tools.py`) and the browser's TS executor return exactly these shapes, so teacher traces, eval and the live app agree.
+
+Rounding: %, mm, mL and degrees to 1 decimal, halves up (`Math.round(x * 10) / 10`). Plane normals to 4 decimals. Counts are integers. Any failure is `{"error": "..."}`; a tool never throws.
+
+Structure ids are the case's label keys (`liver`, `tumor`, `ivc`, `portal_vein`, `aorta`, `kidney_left`, `kidney_right`, `hepatic_vessels`). `measure distance` also accepts `plane` (the current cut).
+
+| Tool | Result | Notes |
+|---|---|---|
+| `get_state` | `{case_id, mode, plane: {normal: [x,y,z], d} \| null, stent: <place_stent result> \| null, thresholds: {margin_min_mm, flr_min_pct}, visible: [ids]}` | `plane` is null until a tool places a cut. |
+| `measure` | `{what, value, unit, method}` | `flr` % (kept organ voxels / organ voxels x 100, organ = liver + tumour). `margin` mm (min tumour EDT over kept organ voxels within one voxel diagonal of the plane; 0 if tumour kept). `vessels_crossed` unit `""` (6-connected vessel components in the cut band inside the organ box, >= 120 mm^3). `tumor_volume` mL (full-resolution tumour voxels x voxel volume). `neck_length`, `neck_diameter` mm (aorta case; current stent, else the default seat). `distance` mm (min voxel-centre distance between `a` and `b` on the planning grid; with `plane`: min abs signed distance, 0 if the plane cuts the structure). flr, margin and vessels need a cut. |
+| `set_plane` | `{plane: {normal, d}, flr_pct, margin_mm, vessels_crossed, tumor_incomplete}` | `normal` + `d` set the plane (both required together). `rotate_deg {axis, deg}` turns the normal about a world axis, pivoting on the point of the cut nearest the tumour centroid (organ centroid without one). `offset_mm` then adds to `d` (positive = toward the resected side). Relative moves with no cut start from the default plane (normal +x through the organ centroid). |
+| `optimize_plane` | `{plane, before: {flr_pct, margin_mm, vessels_crossed}, after: {same}, feasible, reason_codes: [...], angle_deg, offset_mm}` | The app's optimize: local search (+-20 deg, +-15 mm) when the cut goes through the organ (2 % < FLR < 99.5 %), then the wide search around the tumour if that is infeasible and the wide answer scores > 0.5 better. No usable cut: wide search. The plane moves to the answer. `margin_min_mm` / `flr_min_pct` update the session thresholds. `avoid` (structure ids) switches to the "vessels" priority. `max_rotate_deg` / `max_offset_mm` bound the local search and disable the wide fallback. `reason_codes`: what the starting plane violated (`tumor_incomplete`, `margin_below_min`, `flr_below_min`, `vessels_crossed`) or `no_cut`, then `local_search` or `wide_search`, then `avoid_crossed` if the answer still divides an avoided structure. Error on a case without a tumour. |
+| `place_stent` | `{device_id, s0_mm, length_mm, diameter_mm, oversize_pct, rules: [{id, pass, value, limit, unit}], seals}` | Aorta case only. Without `s0_mm`: nearest sealing seat to 2 mm below the lowest renal ostium (1 mm scan). With `s0_mm`: that seat (clamped to the centerline). Device sized 15 % over the 15 mm neck mean at its seat. Rules in check order: `renal` (value = s0 minus lowest renal ostium, mm, limit 0, fails if negative or an ostium is covered), `neck_length` (mm, limit 10), `oversize` (%, limit [10, 20]), `angulation` (deg, limit 60, must be below). `seals` = all pass. `length_mm` default 80. |
+| `optimize_stent` | found: `{found: true, moved_mm, ...place_stent result}`; not found: `{found: false, failing_rule}` | Keeps the device's diameter and slides it +-40 mm (1 mm steps, nearest first). `failing_rule` is the rule id that failed most often across the search. With no stent placed, starts from the default seat. |
+| `set_threshold` | `{thresholds: {margin_min_mm, flr_min_pct}}` | |
+| `show` | `{ok: true, structure_ids, mode, visible: [ids]}` | `isolate` shows only the ids; `hide` hides them; `highlight` changes no visibility. |
+| `window` | `{ok: true, preset}` | |
+| `resect` | `{resected_ml, remnant_flr_pct}` | Needs a cut. |
+| `segment_point` | `{error: "unavailable", reason}` | Until M2 (VISTA-3D endpoint). |
+| `lookup_device_rules` | `{error: "unavailable", reason}` | Until M4 (Tavily). |
+| `write_plan` | `{case_id, kind, plane \| null, metrics: {flr_pct, margin_mm, vessels_crossed, tumor_incomplete, resected_ml, meets_targets} \| null, stent \| null, thresholds, resected}` | `meets_targets` is null on a case without a tumour. |
