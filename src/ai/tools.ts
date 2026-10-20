@@ -52,8 +52,13 @@ export interface OptimizeRequest {
 export interface ToolHost {
   engine(): EngineContext | null;
   grid(): PlanningGrid | null;
-  /** The point of the current cut nearest the tumour: rotations pivot there. */
-  cutPivot(): Vec3;
+  /**
+   * Where the cut is headed: the end of a running animation, else the plane
+   * on screen. Chained calls in one turn build on this, not on a mid-tween frame.
+   */
+  plane(): Plane;
+  /** Tumour centroid (else the organ's): rotations pivot where the cut passes closest to it. */
+  pivotPoint(): Vec3;
   /** Animated, undoable move of the cut that also turns it on (voice cuts). */
   placeCut(p: Plane): void;
   optimize(req: OptimizeRequest): Promise<OptimizeOutcome | null>;
@@ -255,7 +260,14 @@ function liverCase(data: CaseData | null): string | null {
 }
 
 function currentPlane(): Plane {
-  return { n: [...state.plane.n] as Vec3, d: state.plane.d };
+  const p = host!.plane();
+  return { n: [...p.n] as Vec3, d: p.d };
+}
+
+/** `c` projected onto plane `p`. */
+function onPlane(p: Plane, c: Vec3): Vec3 {
+  const k = dot(p.n, c) - p.d;
+  return [c[0] - p.n[0] * k, c[1] - p.n[1] * k, c[2] - p.n[2] * k];
 }
 
 /** Keys of the structures in this case, for errors that list what exists. */
@@ -365,7 +377,8 @@ function setPlane(args: Json): Json {
     if (off === null) return { error: 'offset_mm must be a number' };
     if (!rot && off === 0) return { error: 'give normal and d, or rotate_deg and/or offset_mm' };
     if (!state.plane.on) return { error: 'there is no cut to move; give normal and d, or call optimize_plane' };
-    to = movePlaneBy(currentPlane(), h.cutPivot(), axis && deg !== null ? { axis, deg } : null, off);
+    const from = currentPlane();
+    to = movePlaneBy(from, onPlane(from, h.pivotPoint()), axis && deg !== null ? { axis, deg } : null, off);
   }
   h.placeCut(to);
   const res: Json = { plane: planeOut(to) };

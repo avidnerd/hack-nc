@@ -13,7 +13,11 @@ export default defineConfig({
     watch: { ignored: [/[\\/](site|web-dist|dist)[\\/]/] },
     // The v2 backend (backend/, FastAPI on :8787) in dev; a Nebius Serverless
     // Endpoint in the hosted build.
-    proxy: { '/api/agent': 'http://localhost:8787', '/api/health': 'http://localhost:8787' },
+    proxy: {
+      '/api/agent': 'http://localhost:8787',
+      '/api/health': 'http://localhost:8787',
+      '/api/grounding': 'http://localhost:8787',
+    },
   },
   build: { target: 'es2022', assetsInlineLimit: 0 },
   // Shaders are imported with ?raw so they stay in .glsl files.

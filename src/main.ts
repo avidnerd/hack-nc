@@ -16,7 +16,16 @@ import '@fontsource/ibm-plex-mono/500.css';
 import * as THREE from 'three';
 
 import { intentFromLlm } from './ai/intentFallback.ts';
-import { llmName } from './ai/llm.ts';
+import { llmEnabled, llmName } from './ai/llm.ts';
+import {
+  agentAvailable,
+  askAgent,
+  loadGroundingTotals,
+  probeAgent,
+  runAgentTurn,
+  setAgentAvailable,
+} from './ai/agentClient.ts';
+import { executeTool, getState, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
 import {
   changeLine,
   optimizeExplanation,
@@ -61,6 +70,7 @@ import {
   emit,
   on,
   patch,
+  quietSay,
   resetScene,
   say,
   set,
@@ -76,7 +86,7 @@ import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
 import { OFFSET_MM, score, type OptimizeResult } from './planning/optimize.ts';
 import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
-import { askAgent } from './ai/agentClient.ts';
+import { CommandPalette, GroundingCounter, UnderTheHood } from './ui/agentUi.ts';
 
 /* ------------------------------------------------------------------ globals */
 
@@ -128,6 +138,9 @@ const handControl = new HandController({
 hands.onFrame = (obs, t) => handControl.update(gestures.update(obs, t), t);
 
 const optimizer = new OptimizerClient();
+const palette = new CommandPalette((text) => runCommand(text, text, 'palette'));
+const hood = new UnderTheHood();
+new GroundingCounter(document.querySelector('.tb-left') as HTMLElement);
 const speech = new Speech();
 const stt = new SpeechInput({
   onCommand: (cmd, heard, last) => onVoice(cmd, heard, last),
@@ -187,6 +200,7 @@ async function boot(): Promise<void> {
     },
     tutorial: () => void tutorial.open(),
     upload: () => void pickAndUpload(),
+    palette: () => palette.open(),
   });
   installDrop((files) => void uploadScan(files));
   installTopActions();
@@ -198,6 +212,11 @@ async function boot(): Promise<void> {
     pick: (x, y) => pickScreen(x, y),
     frame: () => renderer.frame,
   });
+
+  // The agent backend is optional: without it every command takes the v1
+  // regex path. Neither probe blocks the first frame.
+  void probeAgent().then((ok) => console.info(`[boot] agent backend: ${ok ? 'available' : 'unavailable'}`));
+  void loadGroundingTotals();
 
   set('phase', 'ready');
   hud.hideLoader();
@@ -272,6 +291,8 @@ function installTopActions(): void {
   };
   mk('Practice', 'Gesture tutorial (H)', () => void tutorial.open());
   mk('Upload CT', 'Load a .nii / .nii.gz CT, optionally with a label map (I); or drop the files anywhere', () => void pickAndUpload());
+  mk('Type a command', 'Command palette (/): type a request instead of speaking it', () => palette.open());
+  mk('Under the hood', 'Live log of agent calls: model, latency, tools, grounding', () => hood.toggle());
   document.body.append(bar);
 }
 
@@ -294,12 +315,96 @@ function onVoice(cmd: string, heard: string, last: boolean): boolean {
     return true;
   }
   if (!last) return false;
-  void intentFromLlm(cmd).then((llm) => {
-    if (llm) dispatchIntent(llm, 'llm');
-    else say("Didn't catch that.");
-  });
+  // The grammar missed: the agent when its backend is up, else the v1 rescue.
+  if (agentAvailable()) {
+    void runCommand(cmd, heard, 'voice');
+    return true;
+  }
+  void llmRescue(cmd);
   return true;
 }
+
+/** v1's last resort for a missed command: the LLM picks one fixed intent. */
+async function llmRescue(cmd: string): Promise<void> {
+  const llm = llmEnabled() ? await intentFromLlm(cmd) : null;
+  if (llm) dispatchIntent(llm, 'llm');
+  else say("Didn't catch that.");
+}
+
+/**
+ * A request for the agent, typed or spoken. The agent's tools run on this
+ * page (src/ai/tools.ts) and its grounded reply is what is said. On any
+ * failure before a tool ran, the v1 grammar takes the command, so the app
+ * never dies with the network.
+ */
+async function runCommand(cmd: string, heard: string, source: 'voice' | 'palette'): Promise<void> {
+  state.transcriptAt = performance.now();
+  set('transcript', heard);
+  if (agentAvailable()) {
+    // Tools reuse the voice code paths; their narration is held back so the
+    // agent's reply is the one line said.
+    quietSay(true);
+    let turn;
+    try {
+      turn = await runAgentTurn(cmd, { state: () => getState(), execute: (name, args) => executeTool(name, args) });
+    } finally {
+      quietSay(false);
+    }
+    if (turn.ok && (turn.text || turn.executed.length)) {
+      say(turn.text ?? templateReply(turn.executed));
+      return;
+    }
+    // DECISION: once a tool has run, the grammar does not replay the
+    // command (that would apply it twice); the reply is built from what ran.
+    if (turn.executed.length) {
+      say(templateReply(turn.executed));
+      return;
+    }
+    console.info('[agent] falling back to the grammar:', turn.error ?? 'empty reply');
+  }
+  const intent = parseIntent(source === 'palette' ? (stripWake(cmd) ?? cmd.trim().toLowerCase()) : cmd);
+  if (intent) dispatchIntent(intent, 'voice');
+  else await llmRescue(cmd);
+}
+
+/* ------------------------------------------------------- agent tool host */
+
+setToolHost({
+  engine: () => engine,
+  grid: () => grid,
+  plane: () => planeTween?.to ?? currentPlane(),
+  pivotPoint: () => grid?.tumorCentroid() ?? grid?.organCentroid() ?? renderer.frame?.centerMm ?? [0, 0, 0],
+  placeCut: (p) => {
+    clearPreview();
+    placeCut(p);
+  },
+  optimize: (req) => {
+    // A cut still travelling from an earlier call this turn lands first, so
+    // the search starts from where that call put it.
+    if (planeTween) {
+      patch('plane', { n: planeTween.to.n, d: planeTween.to.d });
+      planeTween = null;
+    }
+    return optimizePlan(
+      {
+        kind: 'optimize',
+        ...(req.marginMm !== undefined ? { marginMm: req.marginMm } : {}),
+        ...(req.remnantPct !== undefined ? { remnantPct: req.remnantPct } : {}),
+        ...(req.priority ? { priority: req.priority } : {}),
+      },
+      { maxRotateDeg: req.maxRotateDeg, maxOffsetMm: req.maxOffsetMm },
+    );
+  },
+  dispatch: (intent) => dispatchIntent(intent, 'llm'),
+  stentCenterline: () => stents.centerline,
+  stentOstia: () => stents.renalOstia,
+  placeStent: (s0, len) => stents.placeAt(s0, len),
+  optimizeStent: () => stents.optimize(),
+  showCard: (c) => infoCard.show(c),
+  writePlan: () => writePlan(),
+  refreshVisibility: () => emit('visible', state.visible),
+  syncHud: () => hud.syncNumbers(),
+});
 
 /** The temporal gesture network. Optional: the rules work alone without it. */
 async function loadGestureNet(): Promise<void> {
@@ -796,8 +901,15 @@ function throughOrgan(m: PlanMetrics): boolean {
   return m.remnantPct > 2 && m.remnantPct < 99.5;
 }
 
-async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise<void> {
-  if (!engine) return;
+/**
+ * `limits` (the agent's max_rotate_deg / max_offset_mm) keep an answer that
+ * moves the cut further than allowed off the screen; it is still returned.
+ */
+async function optimizePlan(
+  req: Extract<Intent, { kind: 'optimize' }>,
+  limits: { maxRotateDeg?: number; maxOffsetMm?: number } = {},
+): Promise<OptimizeOutcome | null> {
+  if (!engine) return null;
   const mine = state.plane.on ? currentPlane() : null;
   const mineM = mine ? evaluatePlane(engine, mine, { locate: false }) : null;
   const usable = mineM !== null && throughOrgan(mineM);
@@ -842,7 +954,7 @@ async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise
   }
   if (!res) {
     say(state.plane.on ? "Couldn't optimize." : 'Show me a cut first.');
-    return;
+    return null;
   }
   const ms = performance.now() - t0;
   patch('perf', { optimizeMs: Math.round(ms) });
@@ -864,17 +976,24 @@ async function optimizePlan(req: Extract<Intent, { kind: 'optimize' }>): Promise
     : wide
       ? `Nothing near your cut meets your targets, so I searched all around the tumor. ${reason()}`
       : reason();
+  const withinLimits =
+    !(limits.maxRotateDeg !== undefined && res.angleDeg > limits.maxRotateDeg) &&
+    !(limits.maxOffsetMm !== undefined && res.offsetMm > limits.maxOffsetMm);
   if (req.preview) {
     if (moved) {
       preview = { plane: res.plane, ...(newLimits ? { marginMin, remnantMin } : {}) };
       set('ghostPlane', res.plane);
     }
+  } else if (!withinLimits) {
+    say('The best cut is further from yours than the limits allow. The cut is unchanged.');
+    return { res, before, after, th, wide, applied: false };
   } else {
     if (moved) placeCut(res.plane);
     if (res.feasible) speech.chord();
     toast('Planar approximation: real resections follow Couinaud segments', 'info');
   }
   say(line);
+  return { res, before, after, th, wide, applied: !req.preview };
 }
 
 /** "Move the cut 5 mm closer to the tumor" (or, as a question, outline it). */
@@ -1536,6 +1655,12 @@ declare global {
       hear: (text: string) => void;
       /** Ask the v2 agent backend (M0 check): returns the validated tool calls. */
       agent: typeof askAgent;
+      /** Run one agent tool against the live app, as the agent would. */
+      tool: typeof executeTool;
+      /** Force the agent path on or off (tests with a mocked backend). */
+      setAgent: typeof setAgentAvailable;
+      /** Send a typed request down the palette path. */
+      command: (text: string) => Promise<void>;
     };
   }
 }
@@ -1549,4 +1674,7 @@ window.scrub = {
     onVoice(cmd ?? text.trim().toLowerCase(), text, true);
   },
   agent: askAgent,
+  tool: executeTool,
+  setAgent: setAgentAvailable,
+  command: (text) => runCommand(text, text, 'palette'),
 };
