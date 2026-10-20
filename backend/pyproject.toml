@@ -9,6 +9,8 @@ dependencies = [
   "openai>=1.50",
   "jsonschema>=4.23",
   "python-dotenv>=1.0",
+  "numpy>=2.4.6",
+  "scipy>=1.17.1",
 ]
 
 [dependency-groups]
