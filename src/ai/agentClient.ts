@@ -47,7 +47,15 @@ export interface AgentReply {
 
 export type AgentMessage = AgentAssistantMessage | { role: 'tool'; tool_call_id: string; content: string };
 
-const AGENT_URL = (import.meta.env.VITE_AGENT_URL as string | undefined) ?? '/api/agent';
+const CONFIGURED_URL = (import.meta.env.VITE_AGENT_URL as string | undefined) || '';
+const AGENT_URL = CONFIGURED_URL || '/api/agent';
+/**
+ * Whether an agent backend can exist at all: the dev server proxies /api to
+ * it, and a hosted build names one with VITE_AGENT_URL. A static deploy with
+ * neither (the Vercel demo) never probes, because the 404s would show up as
+ * console errors in Chromium; the app then runs on the v1 grammar.
+ */
+export const BACKEND_CONFIGURED = import.meta.env.DEV || CONFIGURED_URL !== '';
 /** Sibling endpoints of the agent URL (…/api/agent → …/api/grounding). */
 const apiUrl = (name: string) => AGENT_URL.replace(/\/agent$/, `/${name}`);
 // Super's budget is 6000 ms (CLAUDE.md 4.3); allow the network on top.
@@ -108,6 +116,7 @@ let coolUntil = 0;
 
 /** Ask the backend whether it can serve the agent. Call once at boot. */
 export async function probeAgent(): Promise<boolean> {
+  if (!BACKEND_CONFIGURED) return (available = false);
   const h = await getJson<{ ok?: boolean; token_factory?: boolean }>(apiUrl('health'));
   available = !!h?.ok && h.token_factory !== false;
   return available;
@@ -150,6 +159,7 @@ function emitTotals(): void {
 
 /** Seed the counter from the backend's cumulative totals. */
 export async function loadGroundingTotals(): Promise<boolean> {
+  if (!BACKEND_CONFIGURED) return false;
   const g = await getJson<{ grounded?: number; rejected?: number }>(apiUrl('grounding'));
   if (!g || typeof g.grounded !== 'number' || typeof g.rejected !== 'number') return false;
   totals.grounded = g.grounded;

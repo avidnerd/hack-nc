@@ -30,7 +30,7 @@ def test_every_schema_tool_has_an_executor(liver: Session) -> None:
         out = execute(liver, spec["function"]["name"], {"__bogus": 1})
         # Schema rejects the bogus arg, so every tool answers with an error dict.
         assert "error" in out
-    assert execute(liver, "no_such_tool", {}) == {"error": "unknown tool 'no_such_tool'"}
+    assert execute(liver, "no_such_tool", {}) == {"error": 'unknown tool "no_such_tool"'}
 
 
 def test_results_are_json(liver: Session) -> None:
@@ -42,6 +42,7 @@ def test_results_are_json(liver: Session) -> None:
 def test_get_state_defaults(liver: Session) -> None:
     st = execute(liver, "get_state", {})
     assert st["case_id"] == "liver"
+    assert st["case_kind"] == "liver"
     assert st["mode"] == "surgeon"
     assert st["plane"] is None
     assert st["stent"] is None
@@ -144,8 +145,13 @@ def test_optimize_plane_without_cut(liver: Session) -> None:
     assert "error" in execute(liver, "optimize_plane", {"avoid": ["spleen"]})
 
 
-def test_optimize_plane_needs_tumor(aorta: Session) -> None:
-    assert "error" in execute(aorta, "optimize_plane", {})
+def test_cut_tools_need_the_liver_case(aorta: Session) -> None:
+    assert "not a liver resection case" in execute(aorta, "optimize_plane", {})["error"]
+    out = execute(aorta, "set_plane", {"normal": [1, 0, 0], "d": 0})
+    assert set(out) == {"plane", "note"}
+    assert "error" in execute(aorta, "measure", {"what": "flr"})
+    assert "error" in execute(aorta, "resect", {})
+    assert execute(aorta, "write_plan", {})["metrics"] is None
 
 
 def test_resect(liver: Session) -> None:
@@ -160,7 +166,8 @@ def test_resect(liver: Session) -> None:
 
 def test_place_stent(aorta: Session) -> None:
     out = execute(aorta, "place_stent", {"device_id": "gore_excluder"})
-    assert set(out) == {"device_id", "s0_mm", "length_mm", "diameter_mm", "oversize_pct", "rules", "seals"}
+    assert set(out) == {"device_id", "s0_mm", "length_mm", "diameter_mm", "oversize_pct", "rules", "rules_source", "seals"}
+    assert out["rules_source"] == "default"
     assert out["seals"] is True
     assert [r["id"] for r in out["rules"]] == ["renal", "neck_length", "oversize", "angulation"]
     assert all(set(r) == {"id", "pass", "value", "limit", "unit"} for r in out["rules"])
@@ -196,7 +203,8 @@ def test_show_and_window(liver: Session) -> None:
     assert out["ok"] is True and out["visible"] == ["tumor", "hepatic_vessels"]
     out = execute(liver, "show", {"structure_ids": ["tumor"], "mode": "hide"})
     assert out["visible"] == ["hepatic_vessels"]
-    assert execute(liver, "show", {"structure_ids": ["ivc"], "mode": "highlight"})["ok"] is True
+    # Highlighting a hidden structure shows it.
+    assert execute(liver, "show", {"structure_ids": ["tumor"], "mode": "highlight"})["visible"] == ["tumor", "hepatic_vessels"]
     assert "error" in execute(liver, "show", {"structure_ids": ["spleen"], "mode": "hide"})
     assert execute(liver, "window", {"preset": "bone"}) == {"ok": True, "preset": "bone"}
     assert "error" in execute(liver, "window", {"preset": "brain"})
@@ -212,6 +220,6 @@ def test_write_plan(liver: Session) -> None:
     assert empty["plane"] is None and empty["metrics"] is None
     execute(liver, "set_plane", {"normal": [1, 0, 0], "d": 340})
     plan = execute(liver, "write_plan", {})
-    assert plan["case_id"] == "liver"
+    assert plan["case_id"] == "liver" and plan["case_kind"] == "liver"
     assert set(plan["metrics"]) >= {"flr_pct", "margin_mm", "vessels_crossed", "tumor_incomplete", "resected_ml"}
     assert plan["thresholds"] == {"margin_min_mm": 10.0, "flr_min_pct": 30.0}

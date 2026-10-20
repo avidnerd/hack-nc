@@ -31,6 +31,8 @@ import type { Centerline } from './centerline.ts';
  * fits with room to drag it around.
  */
 export const STENT_LENGTH_MM = 80;
+/** Where a fresh stent sits when the case has no renal ostia to seat below. */
+export const FALLBACK_S0 = 30;
 /** A fresh stent seats this far below the lowest renal ostium. */
 export const RENAL_CLEARANCE_MM = 2;
 /** Neck mean diameter is taken over this proximal length. */

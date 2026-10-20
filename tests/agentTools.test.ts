@@ -13,6 +13,7 @@ import {
   optimizeReasonCodes,
   planeOut,
   r1,
+  ruleOfReason,
   stentOut,
   stentRules,
   templateReply,
@@ -81,11 +82,14 @@ describe('tool result helpers', () => {
     const st = placeStent(cl, ostia);
     expect(st.seals).toBe(true);
     const rules = stentRules(st, ostia);
-    expect(rules.map((r) => r.id)).toEqual(['renal_clearance', 'neck_length', 'oversize_min', 'oversize_max', 'neck_angulation']);
+    expect(rules.map((r) => r.id)).toEqual(['renal', 'neck_length', 'oversize', 'angulation']);
     expect(rules.every((r) => r.pass)).toBe(true);
     expect(rules[1].value).toBe(r1(st.neckMm));
-    const out = stentOut(st, 'gore_excluder');
-    expect(out).toMatchObject({ device_id: 'gore_excluder', seals: true, s0_mm: r1(st.s0) });
+    expect(rules[2].limit).toEqual([10, 20]);
+    expect(rules[3].unit).toBe('deg');
+    const out = stentOut(st, 'gore_excluder', ostia);
+    expect(out).toMatchObject({ device_id: 'gore_excluder', seals: true, s0_mm: r1(st.s0), rules_source: 'default' });
+    expect(Object.keys(out).sort()).toEqual(['device_id', 'diameter_mm', 'length_mm', 'oversize_pct', 'rules', 'rules_source', 's0_mm', 'seals']);
   });
 
   it('flags the renal rule when the graft covers an ostium', () => {
@@ -98,7 +102,16 @@ describe('tool result helpers', () => {
     expect(renal.value).toBe(-10);
   });
 
-  it('names what the start violated and what the answer still breaks', () => {
+  it('maps a stent fail reason to its rule id', () => {
+    expect(ruleOfReason('Neck too short, 8 millimeters')).toBe('neck_length');
+    expect(ruleOfReason('Neck angled 62 degrees')).toBe('angulation');
+    expect(ruleOfReason('Undersized, 4 percent oversize')).toBe('oversize');
+    expect(ruleOfReason('Left renal artery covered')).toBe('renal');
+    expect(ruleOfReason('Above the renal arteries')).toBe('renal');
+    expect(ruleOfReason(null)).toBe(null);
+  });
+
+  it('names what the start violated, the search, and an avoided structure still cut', () => {
     const o: OptimizeOutcome = {
       res: {
         plane: { n: [1, 0, 0], d: 0 },
@@ -116,16 +129,10 @@ describe('tool result helpers', () => {
       after: metrics({ marginMm: 8, vesselsCrossed: 0 }),
       th: { marginMin: 10, remnantMin: 30, vesselPenalty: 'hard' },
       wide: true,
-      applied: false,
+      hadCut: true,
     };
-    expect(optimizeReasonCodes(o, { maxRotateDeg: 10 }, ['portal_vein'])).toEqual([
-      'start_margin_below_min',
-      'start_crosses_vessels',
-      'searched_around_tumor',
-      'exceeds_max_rotate',
-      'crosses_avoided:portal_vein',
-      'result_margin_below_min',
-    ]);
+    expect(optimizeReasonCodes(o, true)).toEqual(['margin_below_min', 'vessels_crossed', 'wide_search', 'avoid_crossed']);
+    expect(optimizeReasonCodes({ ...o, wide: false, hadCut: false }, false)).toEqual(['no_cut', 'local_search']);
   });
 
   it('builds a template reply only from tool values', () => {

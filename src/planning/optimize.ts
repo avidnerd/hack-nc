@@ -18,6 +18,14 @@ export const CONE_DEG = 20;
 export const DIRECTIONS = 121;
 export const OFFSET_MM = 15;
 
+/** Bounds on the local search (the agent's max_rotate_deg / max_offset_mm). */
+export interface SearchBounds {
+  /** Half-angle of the cone of normals, degrees (default CONE_DEG). */
+  coneDeg?: number;
+  /** Offsets run -offsetMm..offsetMm in 1 mm steps; an integer (default OFFSET_MM). */
+  offsetMm?: number;
+}
+
 export interface OptimizeResult {
   plane: Plane;
   before: PlanMetrics;
@@ -140,8 +148,11 @@ export function optimizePlane(
   th: Thresholds,
   directions = DIRECTIONS,
   fine: EngineContext | null = null,
+  bounds: SearchBounds = {},
 ): OptimizeResult {
   const t0 = performance.now();
+  const cone = bounds.coneDeg ?? CONE_DEG;
+  const off = bounds.offsetMm ?? OFFSET_MM;
   const n0 = normalize(start.n);
   const d0 = start.d;
   const judge = fine ?? ctx;
@@ -168,10 +179,10 @@ export function optimizePlane(
   const ranked: { n: Vec3; d: number; base: number; s: number }[] = [];
   const nearMiss: { n: Vec3; d: number; base: number; s: number }[] = [];
   let candidates = 0;
-  for (const n of fibonacciCap(n0, CONE_DEG, directions)) {
+  for (const n of fibonacciCap(n0, cone, directions)) {
     const base = baseFor(n);
     const ds: number[] = [];
-    for (let k = -OFFSET_MM; k <= OFFSET_MM; k++) ds.push(base + k);
+    for (let k = -off; k <= off; k++) ds.push(base + k);
     const crossings = fineVessels ? vesselCrossingsAlong(judge.grid, n, ds, { box: judge.box }) : null;
     // The tumour's nearest extent along n does not depend on the offset:
     // once per direction, not once per candidate.
@@ -180,11 +191,11 @@ export function optimizePlane(
       const v = n[0] * tumor[i] + n[1] * tumor[i + 1] + n[2] * tumor[i + 2];
       if (v < tmin) tmin = v;
     }
-    for (let k = -OFFSET_MM; k <= OFFSET_MM; k++) {
+    for (let k = -off; k <= off; k++) {
       const d = base + k;
       const exact = tumor.length > 0;
       const m = evaluatePlane(ctx, { n, d }, { locate: false, margin: !exact, vessels: !fineVessels });
-      if (crossings) m.vesselsCrossed = crossings[k + OFFSET_MM];
+      if (crossings) m.vesselsCrossed = crossings[k + off];
       if (exact) {
         m.marginMm = Math.max(0, tmin - d);
         m.tumorIncomplete = tmin - d <= 0;
