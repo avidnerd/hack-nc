@@ -1,0 +1,98 @@
+{
+  "about": "Tool-level parity script (make tool-parity). Each section starts from a fresh case (Python Session.open, TS window.scrub.freshCase) and runs its calls in order. e2e/toolParity.spec.ts runs it through the browser's TS executor into tool_parity_ts.json; backend/tests/test_tool_parity.py replays it through the Python executor and compares.",
+  "sections": [
+    {
+      "case": "liver",
+      "calls": [
+        { "tool": "get_state", "args": {} },
+        { "tool": "measure", "args": { "what": "flr" } },
+        { "tool": "measure", "args": { "what": "tumor_volume" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "tumor", "b": "portal_vein" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "hepatic_vessels", "b": "tumor" } },
+        { "tool": "set_plane", "args": { "rotate_deg": { "axis": "z", "deg": 10 } } },
+        { "tool": "set_plane", "args": { "normal": [1, 0, 0], "d": 345 } },
+        { "tool": "measure", "args": { "what": "flr" } },
+        { "tool": "measure", "args": { "what": "margin" } },
+        { "tool": "measure", "args": { "what": "vessels_crossed" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "plane", "b": "tumor" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "ivc", "b": "plane" } },
+        { "tool": "set_plane", "args": { "normal": [2, 0.2, -0.1], "d": 340 } },
+        { "tool": "set_plane", "args": { "rotate_deg": { "axis": "z", "deg": 10 } } },
+        { "tool": "set_plane", "args": { "offset_mm": -3 } },
+        { "tool": "set_plane", "args": { "rotate_deg": { "axis": "y", "deg": -8 }, "offset_mm": 2 } },
+        { "tool": "get_state", "args": {} },
+        { "tool": "optimize_plane", "args": {} },
+        { "tool": "measure", "args": { "what": "margin" } },
+        { "tool": "optimize_plane", "args": { "margin_min_mm": 12, "max_rotate_deg": 5, "max_offset_mm": 5 } },
+        { "tool": "optimize_plane", "args": { "max_offset_mm": 3.7 } },
+        { "tool": "optimize_plane", "args": { "avoid": ["hepatic_vessels"], "flr_min_pct": 35 } },
+        { "tool": "set_threshold", "args": { "name": "margin_min_mm", "value": 8 } },
+        { "tool": "set_threshold", "args": { "name": "flr_min_pct", "value": 30 } },
+        { "tool": "resect", "args": {} },
+        { "tool": "write_plan", "args": {} },
+        { "tool": "set_plane", "args": { "offset_mm": 1 } },
+        { "tool": "show", "args": { "structure_ids": ["tumor", "hepatic_vessels"], "mode": "isolate" } },
+        { "tool": "show", "args": { "structure_ids": ["tumor"], "mode": "hide" } },
+        { "tool": "show", "args": { "structure_ids": ["tumor", "liver"], "mode": "highlight" } },
+        { "tool": "show", "args": { "structure_ids": ["spleen"], "mode": "hide" } },
+        { "tool": "window", "args": { "preset": "bone" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "plane", "b": "spleen" } },
+        { "tool": "place_stent", "args": { "device_id": "gore_excluder" } },
+        { "tool": "measure", "args": { "what": "neck_length" } },
+        { "tool": "segment_point", "args": { "xyz_mm": [340, 230, 40] } },
+        { "tool": "write_plan", "args": {} },
+        { "tool": "get_state", "args": {} }
+      ]
+    },
+    {
+      "case": "liver",
+      "calls": [
+        { "tool": "measure", "args": { "what": "margin" } },
+        { "tool": "optimize_plane", "args": { "avoid": ["portal_vein"] } },
+        { "tool": "measure", "args": { "what": "margin" } },
+        { "tool": "resect", "args": {} },
+        { "tool": "get_state", "args": {} }
+      ]
+    },
+    {
+      "case": "liver",
+      "calls": [
+        { "tool": "set_plane", "args": { "normal": [1, 0, 0], "d": 345 } },
+        { "tool": "optimize_plane", "args": { "max_rotate_deg": 2, "max_offset_mm": 1 } },
+        { "tool": "optimize_plane", "args": { "avoid": ["portal_vein", "hepatic_vessels"], "max_rotate_deg": 3, "max_offset_mm": 2 } },
+        { "tool": "optimize_plane", "args": { "avoid": ["ivc"], "margin_min_mm": 5, "max_rotate_deg": 0 } },
+        { "tool": "set_plane", "args": { "normal": [1, 0, 0], "d": 150 } },
+        { "tool": "optimize_plane", "args": { "max_rotate_deg": 10 } },
+        { "tool": "write_plan", "args": {} }
+      ]
+    },
+    {
+      "case": "aorta",
+      "calls": [
+        { "tool": "get_state", "args": {} },
+        { "tool": "measure", "args": { "what": "neck_length" } },
+        { "tool": "measure", "args": { "what": "neck_diameter" } },
+        { "tool": "optimize_stent", "args": { "device_id": "gore_excluder" } },
+        { "tool": "place_stent", "args": { "device_id": "gore_excluder" } },
+        { "tool": "measure", "args": { "what": "neck_length" } },
+        { "tool": "measure", "args": { "what": "neck_diameter" } },
+        { "tool": "place_stent", "args": { "device_id": "gore_excluder", "s0_mm": 60 } },
+        { "tool": "optimize_stent", "args": { "device_id": "gore_excluder" } },
+        { "tool": "place_stent", "args": { "device_id": "endurant", "s0_mm": 150, "length_mm": 60 } },
+        { "tool": "optimize_stent", "args": { "device_id": "endurant" } },
+        { "tool": "get_state", "args": {} },
+        { "tool": "place_stent", "args": { "device_id": "gore_excluder", "s0_mm": 300 } },
+        { "tool": "set_plane", "args": { "normal": [0, 0, 1], "d": 50 } },
+        { "tool": "measure", "args": { "what": "flr" } },
+        { "tool": "optimize_plane", "args": {} },
+        { "tool": "resect", "args": {} },
+        { "tool": "measure", "args": { "what": "tumor_volume" } },
+        { "tool": "measure", "args": { "what": "distance", "a": "kidney_left", "b": "aorta" } },
+        { "tool": "lookup_device_rules", "args": { "device_name": "Gore Excluder" } },
+        { "tool": "show", "args": { "structure_ids": ["hepatic_vessels"], "mode": "highlight" } },
+        { "tool": "write_plan", "args": {} },
+        { "tool": "get_state", "args": {} }
+      ]
+    }
+  ]
+}
