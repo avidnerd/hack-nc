@@ -16,6 +16,7 @@ import { Centerline } from './centerline.ts';
 import { flowProfile } from './flow1d.ts';
 import {
   evaluateStent,
+  FALLBACK_S0,
   maxStart,
   optimizeStent,
   ostiaOnCenterline,
@@ -28,8 +29,6 @@ import {
 
 type Project = (p: Vec3) => { x: number; y: number; behind: boolean } | null;
 
-/** Where a fresh stent sits when the case has no renal ostia to seat below. */
-const FALLBACK_S0 = 30;
 const GRAB_PX = 90;
 
 export class StentSession {
@@ -57,6 +56,17 @@ export class StentSession {
 
   get centerline(): Centerline | null {
     return this.cl;
+  }
+
+  /**
+   * The device where it is headed: the end of a running slide, else the one
+   * drawn. Chained agent calls build on this, not on a mid-animation frame.
+   */
+  get settled(): StentState | null {
+    const st = state.stent;
+    if (!st || !this.anim || !this.cl) return st;
+    const to = clamp(this.anim.to, 0, maxStart(this.cl, st.lengthMm));
+    return evaluateStent(this.cl, this.ostia, to, st.diameterMm, st.lengthMm);
   }
 
   /** Renal ostia as arc lengths on the centerline (for the agent's rule breakdown). */
@@ -163,7 +173,7 @@ export class StentSession {
 
   /** "Optimize" while a stent is placed: nearest sealing seat for this device. */
   optimize(): void {
-    const st = state.stent;
+    const st = this.settled;
     if (!st || !this.cl) return;
     if (st.seals) {
       say(`Already seals. Neck ${Math.round(st.neckMm)} millimeters.`);
@@ -175,7 +185,7 @@ export class StentSession {
       return;
     }
     const dir = res.movedMm < 0 ? 'up' : 'down';
-    this.anim = { from: st.s0, to: res.stent.s0, start: performance.now() };
+    this.anim = { from: state.stent?.s0 ?? st.s0, to: res.stent.s0, start: performance.now() };
     say(
       `Optimized. Moved ${Math.abs(Math.round(res.movedMm))} millimeters ${dir}. ` +
         `Neck ${Math.round(res.stent.neckMm)} millimeters. Seals.`,

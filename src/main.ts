@@ -84,7 +84,7 @@ import { parseIntent, stripWake, type Intent, type TiltDir } from './voice/inten
 import { SpeechInput } from './voice/stt.ts';
 import { Speech } from './voice/tts.ts';
 import type { CameraState } from './state.ts';
-import { OFFSET_MM, score, type OptimizeResult } from './planning/optimize.ts';
+import { CONE_DEG, OFFSET_MM, score, type OptimizeResult } from './planning/optimize.ts';
 import type { CaseData, OptimizePriority, Plane, PlanMetrics, PresetName, Thresholds, Vec3 } from './types.ts';
 import { CommandPalette, GroundingCounter, UnderTheHood } from './ui/agentUi.ts';
 
@@ -399,6 +399,8 @@ setToolHost({
   stentCenterline: () => stents.centerline,
   stentOstia: () => stents.renalOstia,
   placeStent: (s0, len) => stents.placeAt(s0, len),
+  stent: () => stents.settled,
+  setStent: (st) => stents.restore(st),
   optimizeStent: () => stents.optimize(),
   showCard: (c) => infoCard.show(c),
   writePlan: () => writePlan(),
@@ -902,8 +904,11 @@ function throughOrgan(m: PlanMetrics): boolean {
 }
 
 /**
- * `limits` (the agent's max_rotate_deg / max_offset_mm) keep an answer that
- * moves the cut further than allowed off the screen; it is still returned.
+ * `limits` (the agent's max_rotate_deg / max_offset_mm) bound the local
+ * search to that cone and offset range and skip the wide fallback, so the
+ * answer never moves the cut further than allowed (backend engine twin:
+ * optimize.py `optimize`). With no usable cut there is nothing to be local
+ * to, and the wide search runs as usual.
  */
 async function optimizePlan(
   req: Extract<Intent, { kind: 'optimize' }>,
@@ -941,8 +946,12 @@ async function optimizePlan(
     wide = true;
     note = mine ? "Your cut wasn't through the liver, so I searched all around the tumor." : 'There was no cut, so I searched all around the tumor.';
   } else {
-    res = await optimizer.run(mine, th, 'local');
-    if (res && !res.feasible) {
+    const bounded = limits.maxRotateDeg !== undefined || limits.maxOffsetMm !== undefined;
+    const bounds = bounded
+      ? { coneDeg: limits.maxRotateDeg ?? CONE_DEG, offsetMm: Math.floor(limits.maxOffsetMm ?? OFFSET_MM) }
+      : undefined;
+    res = await optimizer.run(mine, th, 'local', bounds);
+    if (res && !res.feasible && !bounded) {
       toast('Searching all around the tumor…', 'info');
       const far = await optimizer.run(mine, th, 'wide');
       const quality = (r: OptimizeResult) => score(r.after, r.plane.n, r.plane.d, r.plane.n, r.plane.d, th);
@@ -976,24 +985,18 @@ async function optimizePlan(
     : wide
       ? `Nothing near your cut meets your targets, so I searched all around the tumor. ${reason()}`
       : reason();
-  const withinLimits =
-    !(limits.maxRotateDeg !== undefined && res.angleDeg > limits.maxRotateDeg) &&
-    !(limits.maxOffsetMm !== undefined && res.offsetMm > limits.maxOffsetMm);
   if (req.preview) {
     if (moved) {
       preview = { plane: res.plane, ...(newLimits ? { marginMin, remnantMin } : {}) };
       set('ghostPlane', res.plane);
     }
-  } else if (!withinLimits) {
-    say('The best cut is further from yours than the limits allow. The cut is unchanged.');
-    return { res, before, after, th, wide, applied: false };
   } else {
     if (moved) placeCut(res.plane);
     if (res.feasible) speech.chord();
     toast('Planar approximation: real resections follow Couinaud segments', 'info');
   }
   say(line);
-  return { res, before, after, th, wide, applied: !req.preview };
+  return { res, before, after, th, wide, hadCut: mine !== null };
 }
 
 /** "Move the cut 5 mm closer to the tumor" (or, as a question, outline it). */
@@ -1661,6 +1664,8 @@ declare global {
       setAgent: typeof setAgentAvailable;
       /** Send a typed request down the palette path. */
       command: (text: string) => Promise<void>;
+      /** Reset, then load a case: the state a fresh Python Session.open(id) starts from (tool parity). */
+      freshCase: (id: string) => Promise<void>;
     };
   }
 }
@@ -1677,4 +1682,8 @@ window.scrub = {
   tool: executeTool,
   setAgent: setAgentAvailable,
   command: (text) => runCommand(text, text, 'palette'),
+  freshCase: async (id) => {
+    dispatchIntent({ kind: 'reset' }, 'key');
+    await switchCase(id);
+  },
 };

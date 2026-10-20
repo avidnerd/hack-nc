@@ -79,7 +79,7 @@ test('palette sends a request to the agent, which runs a tool and answers', asyn
   // Round 1 carried the app state; round 2 carried the tool result for call_1.
   expect(bodies).toHaveLength(2);
   expect(bodies[0].text).toBe('optimize the cut with a 10 mm margin');
-  expect(bodies[0].state).toMatchObject({ case_id: 'liver', plane_on: false });
+  expect(bodies[0].state).toMatchObject({ case_id: 'liver', case_kind: 'liver', plane: null });
   expect(bodies[1].history?.map((m) => m.role)).toEqual(['assistant', 'tool']);
   expect(bodies[1].history?.[1].tool_call_id).toBe('call_1');
 
@@ -147,13 +147,13 @@ test('tools drive the live app and answer in the shared shapes', async ({ page }
     page.waitForFunction((t) => Math.abs(window.scrub!.state.plane.d - t) < 0.06, d, { timeout: 20_000 });
 
   const s0 = await tool('get_state');
-  expect(s0).toMatchObject({ case_id: 'liver', mode: 'surgeon', plane_on: false, stent: null, thresholds: { margin_min_mm: 10, flr_min_pct: 30 } });
+  expect(s0).toMatchObject({ case_id: 'liver', case_kind: 'liver', mode: 'surgeon', plane: null, stent: null, thresholds: { margin_min_mm: 10, flr_min_pct: 30 } });
   expect(s0.visible).toContain('tumor');
   expect(await tool('measure', { what: 'flr' })).toHaveProperty('error');
   expect(await tool('segment_point', { xyz_mm: [0, 0, 0] })).toMatchObject({ error: 'unavailable' });
 
   const opt = await tool('optimize_plane', {});
-  expect(opt).toMatchObject({ applied: true });
+  expect(opt.reason_codes).toEqual(['no_cut', 'wide_search']);
   expect(Object.keys(opt.after as object).sort()).toEqual(['flr_pct', 'margin_mm', 'vessels_crossed']);
   await planeAt((opt.plane as { d: number }).d);
 
@@ -192,10 +192,11 @@ test('tools drive the live app and answer in the shared shapes', async ({ page }
   expect(st).toMatchObject({ device_id: 'gore_excluder', seals: true });
   expect((st.rules as { pass: boolean }[]).every((r) => r.pass)).toBe(true);
   expect(await page.evaluate(() => window.scrub!.state.stent?.seals)).toBe(true);
-  expect(await tool('measure', { what: 'neck_length' })).toMatchObject({ value: st.neck_mm, unit: 'mm' });
+  const neck = (st.rules as { id: string; value: number }[]).find((r) => r.id === 'neck_length')!.value;
+  expect(await tool('measure', { what: 'neck_length' })).toMatchObject({ value: neck, unit: 'mm' });
   const lowest = await tool('place_stent', { device_id: 'gore_excluder', s0_mm: Math.max(0, (st.s0_mm as number) - 15) });
   expect(lowest).toMatchObject({ seals: false });
-  expect((lowest.rules as { id: string; pass: boolean }[])[0]).toMatchObject({ id: 'renal_clearance', pass: false });
+  expect((lowest.rules as { id: string; pass: boolean }[])[0]).toMatchObject({ id: 'renal', pass: false });
   // A device sized for that seat may seal nowhere; report, not crash.
   const nowhere = await tool('optimize_stent', { device_id: 'gore_excluder' });
   expect(nowhere.found === true || typeof nowhere.failing_rule === 'string').toBe(true);

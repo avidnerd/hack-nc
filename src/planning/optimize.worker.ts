@@ -3,7 +3,7 @@
  * keeps rendering at full rate while the optimizer thinks.
  */
 
-import { coarseContext, optimizeAround, optimizePlane } from './optimize.ts';
+import { coarseContext, optimizeAround, optimizePlane, type SearchBounds } from './optimize.ts';
 import { vesselCrossingsAlong } from './vessels.ts';
 import type { EngineContext } from './engine.ts';
 import type { CoarseGrid } from './volume.ts';
@@ -20,7 +20,7 @@ export type WorkerIn =
       names: [number, string][];
     }
   /** `wide`: the best cut anywhere around the tumour (`plane` only measures how far it moved; may be null). */
-  | { type: 'run'; id: number; plane: Plane | null; thresholds: Thresholds; directions?: number; mode?: 'local' | 'wide' };
+  | { type: 'run'; id: number; plane: Plane | null; thresholds: Thresholds; directions?: number; mode?: 'local' | 'wide'; bounds?: SearchBounds };
 
 let ctx: EngineContext | null = null;
 let fine: EngineContext | null = null;
@@ -43,6 +43,6 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
   const result =
     msg.mode === 'wide' || !msg.plane
       ? optimizeAround(ctx, msg.plane, msg.thresholds, fine)
-      : optimizePlane(ctx, msg.plane, msg.thresholds, msg.directions, fine);
+      : optimizePlane(ctx, msg.plane, msg.thresholds, msg.directions, fine, msg.bounds);
   self.postMessage({ type: 'result', id: msg.id, result });
 };

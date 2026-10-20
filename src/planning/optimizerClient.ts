@@ -3,7 +3,7 @@
  * inline if the worker cannot start, because a slower optimize beats none.
  */
 
-import { coarseContext, optimizeAround, optimizePlane, type OptimizeResult } from './optimize.ts';
+import { coarseContext, optimizeAround, optimizePlane, type OptimizeResult, type SearchBounds } from './optimize.ts';
 import type { EngineContext } from './engine.ts';
 import type { PlanningGrid } from './volume.ts';
 import type { Plane, Thresholds } from '../types.ts';
@@ -51,21 +51,29 @@ export class OptimizerClient {
     this.worker?.postMessage({ type: 'grid', grid: coarse, fine: fineGrid, fineBox: fine.box, names } satisfies WorkerIn);
   }
 
-  /** `local` refines near `plane`; `wide` finds the best cut anywhere around the tumour. */
-  run(plane: Plane | null, thresholds: Thresholds, mode: 'local' | 'wide' = 'local'): Promise<OptimizeResult | null> {
+  /**
+   * `local` refines near `plane`; `wide` finds the best cut anywhere around the
+   * tumour. `bounds` narrows the local search.
+   */
+  run(
+    plane: Plane | null,
+    thresholds: Thresholds,
+    mode: 'local' | 'wide' = 'local',
+    bounds?: SearchBounds,
+  ): Promise<OptimizeResult | null> {
     if (!this.worker) {
       const ctx = this.inline;
       if (!ctx) return Promise.resolve(null);
       return Promise.resolve(
         mode === 'wide' || !plane
           ? optimizeAround(ctx, plane, thresholds, this.inlineFine)
-          : optimizePlane(ctx, plane, thresholds, undefined, this.inlineFine),
+          : optimizePlane(ctx, plane, thresholds, undefined, this.inlineFine, bounds),
       );
     }
     const id = this.nextId++;
     return new Promise((resolve) => {
       this.pending.set(id, resolve);
-      this.worker!.postMessage({ type: 'run', id, plane, thresholds, mode } satisfies WorkerIn);
+      this.worker!.postMessage({ type: 'run', id, plane, thresholds, mode, bounds } satisfies WorkerIn);
     });
   }
 }

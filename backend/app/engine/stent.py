@@ -206,16 +206,19 @@ def place_stent(cl: Centerline, ostia: list[Ostium], prefer_s0: float | None = N
     return evaluate_stent(cl, ostia, s0, size_at(cl, s0), length_mm)
 
 
-RULE_OF_REASON = {
-    "Renal arteries covered": "renal",
-    "Left renal artery covered": "renal",
-    "Right renal artery covered": "renal",
-    "Above the renal arteries": "renal",
-    "Neck too short": "neck_length",
-    "Undersized": "oversize",
-    "Oversized": "oversize",
-    "Neck angled": "angulation",
-}
+def rule_of_reason(reason: str | None) -> str | None:
+    """The rule id behind a fail reason ("Neck too short, 8 millimeters" is neck_length)."""
+    if not reason:
+        return None
+    if reason.startswith("Neck too short"):
+        return "neck_length"
+    if reason.startswith("Neck angled"):
+        return "angulation"
+    if reason.startswith(("Undersized", "Oversized")):
+        return "oversize"
+    if "renal" in reason.lower():
+        return "renal"
+    return None
 
 
 def optimize_stent(cl: Centerline, ostia: list[Ostium], current: StentState,
