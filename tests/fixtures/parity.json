@@ -1,0 +1,1304 @@
+{
+ "generatedBy": "scripts/parity_dump.ts",
+ "cases": {
+  "liver": {
+   "grid": {
+    "shape": [
+     228,
+     196,
+     56
+    ],
+    "factor": 2,
+    "organ": 164977,
+    "tumor": 5313,
+    "vessel": 28369,
+    "organBox": {
+     "lo": [
+      81,
+      52,
+      5
+     ],
+     "hi": [
+      201,
+      163,
+      49
+     ]
+    },
+    "coarseShape": [
+     76,
+     66,
+     19
+    ],
+    "coarseOrgan": 7415,
+    "organCentroid": [
+     315.1663807682283,
+     233.97900313377016,
+     61.7997539050898
+    ],
+    "tumorCentroid": [
+     378.3681535855449,
+     234.90683229813664,
+     32.12347073216638
+    ]
+   },
+   "planes": [
+    {
+     "plane": {
+      "n": [
+       1,
+       0,
+       0
+      ],
+      "d": 315.1663807682283
+     },
+     "metrics": {
+      "remnantPct": 44.9759663468241,
+      "resectedMl": 726.216,
+      "healthyRemnantMl": 593.6,
+      "marginMm": 35.83294677734375,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.8336192317717064,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0,
+       0,
+       1
+      ],
+      "d": 61.7997539050898
+     },
+     "metrics": {
+      "remnantPct": 46.648320675003184,
+      "resectedMl": 704.144,
+      "healthyRemnantMl": 573.168,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 9,
+      "vesselId": 5,
+      "nearestVesselMm": 0.20024609491019874,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0,
+       1,
+       0
+      ],
+      "d": 234.90683229813664
+     },
+     "metrics": {
+      "remnantPct": 48.203082853973584,
+      "resectedMl": 683.624,
+      "healthyRemnantMl": 613.92,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 4,
+      "vesselId": 4,
+      "nearestVesselMm": 0.906832298136635,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.10614494518002524,
+       -0.7922782160082447,
+       0.6008564546141805
+      ],
+      "d": -174.25281088373873
+     },
+     "metrics": {
+      "remnantPct": 56.8424689502173,
+      "resectedMl": 569.6,
+      "healthyRemnantMl": 707.712,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 6,
+      "vesselId": 5,
+      "nearestVesselMm": 0.0009712018668892597,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.10388064884839217,
+       -0.5077757016245218,
+       -0.8552032785452601
+      ],
+      "d": -173.37113895154596
+     },
+     "metrics": {
+      "remnantPct": 82.31995975196543,
+      "resectedMl": 233.344,
+      "healthyRemnantMl": 1047.76,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 7,
+      "vesselId": 5,
+      "nearestVesselMm": 0.0032882563247085272,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.5972813095024991,
+       0.6811435451622064,
+       0.423436545662796
+      ],
+      "d": -11.650903064517646
+     },
+     "metrics": {
+      "remnantPct": 45.22266740212272,
+      "resectedMl": 722.96,
+      "healthyRemnantMl": 554.352,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 3,
+      "vesselId": 3,
+      "nearestVesselMm": 0.004154255902715676,
+      "nearestVesselId": 3
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.594191687063447,
+       -0.42842834334963725,
+       -0.6807241685436032
+      ],
+      "d": -330.68941060483354
+     },
+     "metrics": {
+      "remnantPct": 48.23823926971639,
+      "resectedMl": 683.16,
+      "healthyRemnantMl": 596.376,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.009416900824248842,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.5241836082141453,
+       0.8086801231531807,
+       -0.26696067743500357
+      ],
+      "d": 386.8240413814408
+     },
+     "metrics": {
+      "remnantPct": 88.12440522012159,
+      "resectedMl": 156.736,
+      "healthyRemnantMl": 1134.528,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 1,
+      "vesselId": 8,
+      "nearestVesselMm": 0.05353230182043944,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.06904130661408775,
+       -0.5908991134309367,
+       -0.8037857523790483
+      ],
+      "d": -113.55707816238746
+     },
+     "metrics": {
+      "remnantPct": 89.7803936306273,
+      "resectedMl": 134.88,
+      "healthyRemnantMl": 1142.432,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 4,
+      "vesselId": 5,
+      "nearestVesselMm": 0.0002147176882090207,
+      "nearestVesselId": 3
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.8658653690994941,
+       -0.47369353643014,
+       0.16090865774875074
+      ],
+      "d": 127.78375268325601
+     },
+     "metrics": {
+      "remnantPct": 23.992435309164307,
+      "resectedMl": 1003.16,
+      "healthyRemnantMl": 316.656,
+      "marginMm": 57.619441986083984,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 7,
+      "vesselId": 5,
+      "nearestVesselMm": 0.001323838582933945,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.03274797770505684,
+       -0.40002316909341323,
+       -0.9159197749501272
+      ],
+      "d": -87.05996054705167
+     },
+     "metrics": {
+      "remnantPct": 96.17401213502488,
+      "resectedMl": 50.496,
+      "healthyRemnantMl": 1226.816,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 2,
+      "vesselId": 5,
+      "nearestVesselMm": 0.0018588432598249938,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.3815067791766015,
+       -0.8914287724140719,
+       -0.244555353968456
+      ],
+      "d": -107.10738605513106
+     },
+     "metrics": {
+      "remnantPct": 49.67540929947811,
+      "resectedMl": 664.192,
+      "healthyRemnantMl": 655.112,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 3,
+      "vesselId": 5,
+      "nearestVesselMm": 0.00037860225681640713,
+      "nearestVesselId": 3
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.22888951711479497,
+       0.5262313572172364,
+       -0.8189567434463566
+      ],
+      "d": 29.3320333367015
+     },
+     "metrics": {
+      "remnantPct": 78.23393563951339,
+      "resectedMl": 287.272,
+      "healthyRemnantMl": 990.104,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 7,
+      "vesselId": 5,
+      "nearestVesselMm": 0.002009677892189643,
+      "nearestVesselId": 4
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.03928262555114465,
+       -0.8809177156643861,
+       -0.47163635733311343
+      ],
+      "d": -243.16565259941046
+     },
+     "metrics": {
+      "remnantPct": 40.26258205689278,
+      "resectedMl": 788.424,
+      "healthyRemnantMl": 531.384,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.0032729274105918194,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.5651283772277992,
+       -0.7173844153450942,
+       0.4074181118603486
+      ],
+      "d": 82.16076999485006
+     },
+     "metrics": {
+      "remnantPct": 77.9448044272838,
+      "resectedMl": 291.088,
+      "healthyRemnantMl": 986.312,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 1,
+      "vesselId": 8,
+      "nearestVesselMm": 0.017449243064092457,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.9879307077186893,
+       0.1372145834351326,
+       -0.07186845510495475
+      ],
+      "d": -302.57856070378784
+     },
+     "metrics": {
+      "remnantPct": 42.343478181807164,
+      "resectedMl": 760.96,
+      "healthyRemnantMl": 516.352,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 2,
+      "vesselId": 8,
+      "nearestVesselMm": 0.012499463953474788,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.974690905707332,
+       0.18425152619221805,
+       0.12660574010391246
+      ],
+      "d": 346.4325864736163
+     },
+     "metrics": {
+      "remnantPct": 37.32156603647781,
+      "resectedMl": 827.24,
+      "healthyRemnantMl": 492.576,
+      "marginMm": 41.08527755737305,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 4,
+      "vesselId": 8,
+      "nearestVesselMm": 0.03346760379577063,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.7582014493486514,
+       0.4953946019759374,
+       -0.4239277657086252
+      ],
+      "d": 366.07294406059236
+     },
+     "metrics": {
+      "remnantPct": 81.2998175503252,
+      "resectedMl": 246.808,
+      "healthyRemnantMl": 1071.752,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.012361614998212644,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.09187793510905011,
+       -0.9932854072886874,
+       -0.07030323397571107
+      ],
+      "d": -207.89403881210166
+     },
+     "metrics": {
+      "remnantPct": 52.36548124890136,
+      "resectedMl": 628.688,
+      "healthyRemnantMl": 677.84,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 4,
+      "vesselId": 5,
+      "nearestVesselMm": 0.002389105566521721,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.42311888812122145,
+       -0.091322173605303,
+       0.9014602970309143
+      ],
+      "d": -86.72670780849066
+     },
+     "metrics": {
+      "remnantPct": 64.27138328373046,
+      "resectedMl": 471.552,
+      "healthyRemnantMl": 805.76,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 7,
+      "vesselId": 5,
+      "nearestVesselMm": 0.0009501489749652592,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.8624491759678293,
+       0.07428426237836509,
+       0.5006628278944968
+      ],
+      "d": 312.44210893085193
+     },
+     "metrics": {
+      "remnantPct": 38.0016608375713,
+      "resectedMl": 818.264,
+      "healthyRemnantMl": 501.552,
+      "marginMm": 24.657655715942383,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.0009803107828361135,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.18125449848801223,
+       0.6584199290310668,
+       0.7304998315075674
+      ],
+      "d": 269.30421629695195
+     },
+     "metrics": {
+      "remnantPct": 58.77243494547725,
+      "resectedMl": 544.128,
+      "healthyRemnantMl": 733.7760000000001,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.009031018495988974,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.7140565125523031,
+       0.5152346916005889,
+       -0.47397943990524394
+      ],
+      "d": 414.60689863879617
+     },
+     "metrics": {
+      "remnantPct": 100,
+      "resectedMl": 0,
+      "healthyRemnantMl": 1277.3120000000001,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 38.33776439955602,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.5889697166178208,
+       -0.532036585774467,
+       0.6083187850992045
+      ],
+      "d": -317.6562177479185
+     },
+     "metrics": {
+      "remnantPct": 10.82211459779242,
+      "resectedMl": 1176.984,
+      "healthyRemnantMl": 109.744,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 2,
+      "vesselId": 8,
+      "nearestVesselMm": 0.045019355519400506,
+      "nearestVesselId": 8
+     }
+    }
+   ],
+   "optimizer": [
+    {
+     "mode": "local",
+     "th": {
+      "marginMin": 10,
+      "remnantMin": 30,
+      "vesselPenalty": "hard"
+     },
+     "plane": {
+      "n": [
+       0.905101140123672,
+       0.013287273395565206,
+       -0.42498867574623733
+      ],
+      "d": 340.93060721316044
+     },
+     "after": {
+      "remnantPct": 97.81121004746116,
+      "resectedMl": 28.888,
+      "healthyRemnantMl": 1260.416,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 11.851030876226616,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 94.20646514362608,
+      "resectedMl": 76.464,
+      "healthyRemnantMl": 1222.92,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 2.8510308762266163,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 0,
+     "offsetMm": 9,
+     "feasible": false,
+     "violated": [
+      "tumor"
+     ],
+     "candidates": 3751,
+     "ms": 435.90829199999985,
+     "quality": -10902.188789952539,
+     "start": {
+      "n": [
+       0.905101140123672,
+       0.013287273395565206,
+       -0.42498867574623733
+      ],
+      "d": 331.93060721316044
+     }
+    },
+    {
+     "mode": "local",
+     "th": {
+      "marginMin": 10,
+      "remnantMin": 30,
+      "vesselPenalty": "hard"
+     },
+     "plane": {
+      "n": [
+       0.874773543938496,
+       0.12730568393624236,
+       -0.4675088337805071
+      ],
+      "d": 306.06061171582064
+     },
+     "after": {
+      "remnantPct": 70.43769737599787,
+      "resectedMl": 390.168,
+      "healthyRemnantMl": 929.648,
+      "marginMm": 10,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.04277252673688281,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 76.03847809088539,
+      "resectedMl": 316.248,
+      "healthyRemnantMl": 1002.488,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.23457624882348682,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 17.870206946967127,
+     "offsetMm": 12,
+     "feasible": true,
+     "violated": [
+      "tumor"
+     ],
+     "candidates": 3751,
+     "ms": 683.84625,
+     "quality": 70.43769737599787,
+     "start": {
+      "n": [
+       0.9331652822719653,
+       -0.14458025839035812,
+       -0.32908829338957163
+      ],
+      "d": 283.54567617105374
+     }
+    },
+    {
+     "mode": "local",
+     "th": {
+      "marginMin": 10,
+      "remnantMin": 30,
+      "vesselPenalty": "hard"
+     },
+     "plane": {
+      "n": [
+       1,
+       0,
+       0
+      ],
+      "d": 330.1663807682283
+     },
+     "after": {
+      "remnantPct": 56.307242827788116,
+      "resectedMl": 576.664,
+      "healthyRemnantMl": 743.152,
+      "marginMm": 16.124515533447266,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 1,
+      "vesselId": 8,
+      "nearestVesselMm": 0.16638076822829362,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 44.9759663468241,
+      "resectedMl": 726.216,
+      "healthyRemnantMl": 593.6,
+      "marginMm": 35.83294677734375,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.8336192317717064,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 0,
+     "offsetMm": 15,
+     "feasible": false,
+     "violated": [
+      "vessels"
+     ],
+     "candidates": 3751,
+     "ms": 782.777,
+     "quality": -143.69275717221188,
+     "start": {
+      "n": [
+       1,
+       0,
+       0
+      ],
+      "d": 315.1663807682283
+     }
+    },
+    {
+     "mode": "wide",
+     "th": {
+      "marginMin": 10,
+      "remnantMin": 30,
+      "vesselPenalty": "hard"
+     },
+     "plane": {
+      "n": [
+       0.474179907486984,
+       0.3039598904203465,
+       -0.8262940156816375
+      ],
+      "d": 191.60614222817722
+     },
+     "after": {
+      "remnantPct": 75.53658994890196,
+      "resectedMl": 322.872,
+      "healthyRemnantMl": 996.9440000000001,
+      "marginMm": 10.198039054870605,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.0653778609622293,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 94.20646514362608,
+      "resectedMl": 76.464,
+      "healthyRemnantMl": 1222.92,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 2.8510308762266163,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 38.33615005277801,
+     "offsetMm": 140.32446498498322,
+     "feasible": true,
+     "violated": [
+      "tumor"
+     ],
+     "candidates": 2175,
+     "ms": 824.4611670000004,
+     "quality": 75.53658994890196,
+     "start": {
+      "n": [
+       0.905101140123672,
+       0.013287273395565206,
+       -0.42498867574623733
+      ],
+      "d": 331.93060721316044
+     }
+    },
+    {
+     "mode": "wide",
+     "th": {
+      "marginMin": 10,
+      "remnantMin": 30,
+      "vesselPenalty": "hard"
+     },
+     "plane": {
+      "n": [
+       0.474179907486984,
+       0.3039598904203465,
+       -0.8262940156816375
+      ],
+      "d": 191.60614222817722
+     },
+     "after": {
+      "remnantPct": 75.53658994890196,
+      "resectedMl": 322.872,
+      "healthyRemnantMl": 996.9440000000001,
+      "marginMm": 10.198039054870605,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.0653778609622293,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 75.53658994890196,
+      "resectedMl": 322.872,
+      "healthyRemnantMl": 996.9440000000001,
+      "marginMm": 10.198039054870605,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.0653778609622293,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 0,
+     "offsetMm": 0,
+     "feasible": true,
+     "violated": [],
+     "candidates": 2175,
+     "ms": 838.0007079999996,
+     "quality": 75.53658994890196,
+     "start": null
+    },
+    {
+     "mode": "local",
+     "th": {
+      "marginMin": 12,
+      "remnantMin": 30,
+      "vesselPenalty": "hard",
+      "priority": "vessels"
+     },
+     "plane": {
+      "n": [
+       0.874773543938496,
+       0.12730568393624236,
+       -0.4675088337805071
+      ],
+      "d": 306.06061171582064
+     },
+     "after": {
+      "remnantPct": 70.43769737599787,
+      "resectedMl": 390.168,
+      "healthyRemnantMl": 929.648,
+      "marginMm": 10,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.04277252673688281,
+      "nearestVesselId": 8
+     },
+     "before": {
+      "remnantPct": 76.03847809088539,
+      "resectedMl": 316.248,
+      "healthyRemnantMl": 1002.488,
+      "marginMm": 0,
+      "tumorIncomplete": true,
+      "vesselsCrossed": 0,
+      "vesselId": 0,
+      "nearestVesselMm": 0.23457624882348682,
+      "nearestVesselId": 8
+     },
+     "angleDeg": 17.870206946967127,
+     "offsetMm": 12,
+     "feasible": false,
+     "violated": [
+      "tumor"
+     ],
+     "candidates": 3751,
+     "ms": 596.7483329999995,
+     "quality": -969.5623026240021,
+     "start": {
+      "n": [
+       0.9331652822719653,
+       -0.14458025839035812,
+       -0.32908829338957163
+      ],
+      "d": 283.54567617105374
+     }
+    }
+   ],
+   "stent": null
+  },
+  "aorta": {
+   "grid": {
+    "shape": [
+     174,
+     123,
+     95
+    ],
+    "factor": 2,
+    "organ": 71307,
+    "tumor": 0,
+    "vessel": 15803,
+    "organBox": {
+     "lo": [
+      85,
+      21,
+      45
+     ],
+     "hi": [
+      153,
+      94,
+      94
+     ]
+    },
+    "coarseShape": [
+     58,
+     41,
+     32
+    ],
+    "coarseOrgan": 3299,
+    "organCentroid": [
+     322.19747571297745,
+     131.17463518118868,
+     197.48602877116994
+    ],
+    "tumorCentroid": null
+   },
+   "planes": [
+    {
+     "plane": {
+      "n": [
+       1,
+       0,
+       0
+      ],
+      "d": 322.19747571297745
+     },
+     "metrics": {
+      "remnantPct": 46.05999410997518,
+      "resectedMl": 599.9121455919151,
+      "healthyRemnantMl": 512.2719109227272,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 5,
+      "vesselId": 8,
+      "nearestVesselMm": 0.14123181649307526,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0,
+       0,
+       1
+      ],
+      "d": 197.48602877116994
+     },
+     "metrics": {
+      "remnantPct": 46.54381757751693,
+      "resectedMl": 594.5311381242393,
+      "healthyRemnantMl": 517.652918390403,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 4,
+      "vesselId": 3,
+      "nearestVesselMm": 0.19458590007619136,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0,
+       1,
+       0
+      ],
+      "d": 131.17463518118868
+     },
+     "metrics": {
+      "remnantPct": 50.243314120633315,
+      "resectedMl": 553.3859274003886,
+      "healthyRemnantMl": 558.7981291142537,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 6,
+      "vesselId": 3,
+      "nearestVesselMm": 1.0903914067746143,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.4167167469909442,
+       0.34664887066333155,
+       0.8403461865476171
+      ],
+      "d": 69.6941287301093
+     },
+     "metrics": {
+      "remnantPct": 42.0197175592859,
+      "resectedMl": 644.8474572277809,
+      "healthyRemnantMl": 467.33659928686143,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 3,
+      "nearestVesselMm": 0.00016357486448725922,
+      "nearestVesselId": 5
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.035014417729846994,
+       0.34357237932760215,
+       -0.9384732338826771
+      ],
+      "d": -136.40419502341712
+     },
+     "metrics": {
+      "remnantPct": 44.86375811631397,
+      "resectedMl": 613.2164915917045,
+      "healthyRemnantMl": 498.96756492293775,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 5,
+      "vesselId": 4,
+      "nearestVesselMm": 0.001042022148169508,
+      "nearestVesselId": 3
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.4561245605459529,
+       -0.572939248392556,
+       0.6809486051958211
+      ],
+      "d": 219.72938733447307
+     },
+     "metrics": {
+      "remnantPct": 68.75061354425232,
+      "resectedMl": 347.55069391947177,
+      "healthyRemnantMl": 764.6333625951705,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 8,
+      "nearestVesselMm": 0.005171836981389788,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       0.5647197316590664,
+       0.36473522374269746,
+       0.7403106383379052
+      ],
+      "d": 382.1692448941593
+     },
+     "metrics": {
+      "remnantPct": 60.512993114280505,
+      "resectedMl": 439.1681949778112,
+      "healthyRemnantMl": 673.015861536831,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 5,
+      "vesselId": 4,
+      "nearestVesselMm": 0.010643342485934681,
+      "nearestVesselId": 8
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.9607450979965121,
+       -0.25088908906980034,
+       0.11842095110831659
+      ],
+      "d": -281.88570823836744
+     },
+     "metrics": {
+      "remnantPct": 79.59807592522473,
+      "resectedMl": 226.90694678187296,
+      "healthyRemnantMl": 885.2771097327693,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 4,
+      "vesselId": 4,
+      "nearestVesselMm": 0.02392265147125272,
+      "nearestVesselId": 4
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.5925634029724342,
+       -0.26115850694672815,
+       0.7620136794750371
+      ],
+      "d": -82.13150729318923
+     },
+     "metrics": {
+      "remnantPct": 42.73493485913024,
+      "resectedMl": 636.8929244494776,
+      "healthyRemnantMl": 475.2911320651646,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 3,
+      "vesselId": 3,
+      "nearestVesselMm": 0.007029651933407877,
+      "nearestVesselId": 3
+     }
+    },
+    {
+     "plane": {
+      "n": [
+       -0.20204815707466028,
+       -0.16036829135343508,
+       0.9661565884219355
+      ],
+      "d": 127.8267680300252
+     },
+     "metrics": {
+      "remnantPct": 73.54256945320937,
+      "resectedMl": 294.2553243048402,
+      "healthyRemnantMl": 817.9287322098021,
+      "marginMm": 0,
+      "tumorIncomplete": false,
+      "vesselsCrossed": 9,
+      "vesselId": 4,
+      "nearestVesselMm": 0.007196092357148132,
+      "nearestVesselId": 8
+     }
+    }
+   ],
+   "optimizer": [],
+   "stent": {
+    "length": 195.30878157259968,
+    "ostia": [
+     {
+      "s": 71.87470977747252,
+      "side": "left"
+     },
+     {
+      "s": 76.68448058151155,
+      "side": "right"
+     }
+    ],
+    "seats": [
+     {
+      "s0": 0,
+      "lengthMm": 80,
+      "diameterMm": 22.967128864345543,
+      "neckMm": 0,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 37.42252144903658,
+      "seals": false,
+      "verdict": "Won't seal: Renal arteries covered.",
+      "failReason": "Renal arteries covered"
+     },
+     {
+      "s0": 20,
+      "lengthMm": 80,
+      "diameterMm": 25.594410963832736,
+      "neckMm": 47,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 22.883269542297494,
+      "seals": false,
+      "verdict": "Won't seal: Renal arteries covered.",
+      "failReason": "Renal arteries covered"
+     },
+     {
+      "s0": 50,
+      "lengthMm": 80,
+      "diameterMm": 24.869401263704834,
+      "neckMm": 34,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 13.274613020944711,
+      "seals": false,
+      "verdict": "Won't seal: Renal arteries covered.",
+      "failReason": "Renal arteries covered"
+     },
+     {
+      "s0": 78.68448058151155,
+      "lengthMm": 80,
+      "diameterMm": 21.37335548136847,
+      "neckMm": 31,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 15.553567023326273,
+      "seals": true,
+      "verdict": "Seals.",
+      "failReason": null
+     },
+     {
+      "s0": 90,
+      "lengthMm": 80,
+      "diameterMm": 19.822671602883368,
+      "neckMm": 77.5,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 11.858533180151863,
+      "seals": true,
+      "verdict": "Seals.",
+      "failReason": null
+     },
+     {
+      "s0": 110,
+      "lengthMm": 80,
+      "diameterMm": 19.143401638556934,
+      "neckMm": 75,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 11.928573132217169,
+      "seals": true,
+      "verdict": "Seals.",
+      "failReason": null
+     },
+     {
+      "s0": 140,
+      "lengthMm": 80,
+      "diameterMm": 20.12741971351863,
+      "neckMm": 26.5,
+      "oversizePct": 14.999999999999991,
+      "angulationDeg": 5.3357339777924295,
+      "seals": true,
+      "verdict": "Seals.",
+      "failReason": null
+     }
+    ],
+    "fixedDiameter": [
+     {
+      "s0": 60,
+      "lengthMm": 80,
+      "diameterMm": 30,
+      "neckMm": 27,
+      "oversizePct": 47.82367035305073,
+      "angulationDeg": 3.456160532490224,
+      "seals": false,
+      "verdict": "Won't seal: Renal arteries covered.",
+      "failReason": "Renal arteries covered"
+     },
+     {
+      "s0": 100,
+      "lengthMm": 80,
+      "diameterMm": 30,
+      "neckMm": 68.5,
+      "oversizePct": 76.2677291156814,
+      "angulationDeg": 1.5942812907242383,
+      "seals": false,
+      "verdict": "Won't seal: Oversized, 76 percent.",
+      "failReason": "Oversized, 76 percent"
+     }
+    ],
+    "placed": {
+     "s0": 79,
+     "lengthMm": 80,
+     "diameterMm": 21.30886448845765,
+     "neckMm": 40.5,
+     "oversizePct": 14.999999999999991,
+     "angulationDeg": 15.819618420806414,
+     "seals": true,
+     "verdict": "Seals.",
+     "failReason": null
+    },
+    "optimized": [
+     {
+      "from": 10,
+      "diameterMm": 25.54554148479721,
+      "stent": null,
+      "movedMm": 0,
+      "blocker": "Renal arteries covered"
+     },
+     {
+      "from": 60,
+      "diameterMm": 23.338616824763477,
+      "stent": null,
+      "movedMm": 0,
+      "blocker": "Renal arteries covered"
+     },
+     {
+      "from": 100,
+      "diameterMm": 19.572499273169992,
+      "stent": {
+       "s0": 100,
+       "lengthMm": 80,
+       "diameterMm": 19.572499273169992,
+       "neckMm": 68.5,
+       "oversizePct": 14.999999999999991,
+       "angulationDeg": 1.5942812907242383,
+       "seals": true,
+       "verdict": "Seals.",
+       "failReason": null
+      },
+      "movedMm": 0,
+      "blocker": null
+     },
+     {
+      "from": 115,
+      "diameterMm": 19.093650376445556,
+      "stent": {
+       "s0": 115,
+       "lengthMm": 80,
+       "diameterMm": 19.093650376445556,
+       "neckMm": 70,
+       "oversizePct": 14.999999999999991,
+       "angulationDeg": 1.937760800842582,
+       "seals": true,
+       "verdict": "Seals.",
+       "failReason": null
+      },
+      "movedMm": 0,
+      "blocker": null
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,5 +1,5 @@
 # Scrub+ v2. `make help` lists targets.
-.PHONY: help install dev backend web test test-web test-backend e2e secrets frametime tf-check
+.PHONY: help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -25,6 +25,10 @@ test-web:
 
 test-backend:
 	cd backend && uv run pytest -q
+
+parity: ## Re-dump TS engine numbers to tests/fixtures/parity.json and check the Python engine
+	node --experimental-transform-types scripts/parity_dump.ts
+	cd backend && uv run pytest -q tests/test_engine_parity.py
 
 e2e: ## Playwright smoke tests
 	npx playwright test
