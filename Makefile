@@ -1,5 +1,5 @@
 # Scrub+ v2. `make help` lists targets.
-.PHONY: help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity
+.PHONY: help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity commands distill distill-check eval
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -41,3 +41,20 @@ frametime: ## Measure render frame time (needs `make web` running)
 
 tf-check: ## List Token Factory models and run one Super tool call
 	cd backend && uv run python scripts/tf_check.py
+
+commands: ## Generate the surgeon-command set (add PARAPHRASE=1 to use Super)
+	cd backend && uv run python ../distill/gen_commands.py $(if $(PARAPHRASE),--paraphrase,)
+
+distill: commands ## Teacher traces -> verify -> SFT files (needs Token Factory key)
+	cd backend && uv run python ../distill/teach.py
+	cd backend && uv run python ../distill/verify.py ../distill/data/traces_$$(grep NEBIUS_TF_MODEL_SUPER ../.env | cut -d= -f2 | tr / _).jsonl
+	cd backend && uv run python ../distill/export_sft.py ../distill/data/traces_$$(grep NEBIUS_TF_MODEL_SUPER ../.env | cut -d= -f2 | tr / _)_verified.jsonl
+
+distill-check: ## Pipeline self-check: oracle policy through solve + verify (no network)
+	cd backend && uv run python ../distill/teach.py --oracle --split train,val,test --workers 1
+	cd backend && uv run python ../distill/verify.py ../distill/data/traces_oracle.jsonl
+
+eval: ## Eval every configured model on the test split -> metrics/results.json
+	cd backend && uv run python ../distill/eval.py run --model super
+	cd backend && if [ -n "$$NANO_BASE_URL" ]; then uv run python ../distill/eval.py run --model nano && uv run python ../distill/eval.py run --model nano-lora; fi
+	cd backend && uv run python ../distill/eval.py report

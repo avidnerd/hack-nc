@@ -30,3 +30,5 @@ realistic_surgical_glove_with_folds_texture.zip
 backend/.venv/
 .pytest_cache/
 distill/data/traces_*.jsonl
+distill/data/sft_*.jsonl
+distill/data/eval_*.jsonl

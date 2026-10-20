@@ -63,10 +63,13 @@ class AgentResult:
 
 
 def build_messages(text: str, state: dict[str, Any] | None, history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # DECISION: one system message. Nemotron Nano's chat template renders only
+    # messages[0] as system and silently drops any later system message, so
+    # the state rides in the first one for every model.
+    system = SYSTEM_PROMPT
     if state:
-        messages.append({"role": "system", "content": "Current state (from get_state):\n" + json.dumps(state, separators=(",", ":"))})
-    messages.append({"role": "user", "content": text})
+        system += "\n\nCurrent state (from get_state):\n" + json.dumps(state, separators=(",", ":"))
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}, {"role": "user", "content": text}]
     messages.extend(history or [])
     return messages
 
