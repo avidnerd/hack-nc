@@ -17,13 +17,12 @@ import loop  # noqa: E402
 import oracle  # noqa: E402
 import verify  # noqa: E402
 
-COMMANDS = ROOT / "distill" / "data" / "commands.jsonl"
-
-
 @pytest.fixture(scope="module")
-def commands():
-    subprocess.run([sys.executable, str(ROOT / "distill" / "gen_commands.py")], check=True, capture_output=True)
-    return [json.loads(ln) for ln in COMMANDS.read_text().splitlines()]
+def commands(tmp_path_factory):
+    # Written to a temp file: the real commands.jsonl holds the paraphrased set.
+    out = tmp_path_factory.mktemp("distill") / "commands.jsonl"
+    subprocess.run([sys.executable, str(ROOT / "distill" / "gen_commands.py"), "--out", str(out)], check=True, capture_output=True)
+    return [json.loads(ln) for ln in out.read_text().splitlines()]
 
 
 def one_per_template(commands):

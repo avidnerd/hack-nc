@@ -99,7 +99,9 @@ def _complete(client: ChatClient, model: str, messages: list[dict[str, Any]], ti
         tools=tool_specs(),
         tool_choice=tool_choice,
         temperature=0,
-        max_tokens=512,
+        # DECISION: 2048, not 512. Super reasons before it answers; after long tool
+        # results 512 tokens went to reasoning and the reply came back empty.
+        max_tokens=2048,
         timeout=timeout_s,
     )
 

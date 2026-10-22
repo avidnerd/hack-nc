@@ -5,8 +5,9 @@
 Each row: {id, case_id, template, text, goal, setup, steps, split}.
 
 With --paraphrase, Nemotron 3 Super on Token Factory rewrites every phrasing
-into more surgeon-style variants first (the teacher's first job); without it
-only the hand-written phrasings are used, so the generator runs offline.
+into more surgeon-style variants first (the teacher's first job) and caches
+them in distill/data/paraphrases.json; later runs reuse that file offline.
+Without the file, only the hand-written phrasings are used.
 
 Split is by case: test cases never appear in training. DECISION: with fewer
 than three cases of a kind (true until the VISTA-3D gallery lands in M2), a
@@ -34,6 +35,9 @@ from templates import CUT, STRUCTURE_IDS, TEMPLATES, Template  # noqa: E402
 
 SEED = 20261020
 OUT = ROOT / "distill" / "data" / "commands.jsonl"
+# DECISION: the teacher's paraphrases (temperature 0.7) are cached and committed,
+# so the command set rebuilds exactly; delete the file to ask Super again.
+PARAPHRASES = ROOT / "distill" / "data" / "paraphrases.json"
 
 
 def cases_by_kind() -> dict[str, list[str]]:
@@ -44,14 +48,16 @@ def cases_by_kind() -> dict[str, list[str]]:
     return out
 
 
-def paraphrase(t: Template, client, model: str, k: int = 6) -> tuple[str, ...]:
+def paraphrase(t: Template, client, model: str, k: int = 20) -> tuple[str, ...]:
     """Ask the teacher for k more phrasings that keep every {slot}."""
     prompt = (
         "Rewrite each request below as a vascular or liver surgeon might say it to a voice assistant in the OR: "
         f"terse, informal, sometimes slang. Give {k} new variants in total, one per line, no numbering. "
         "Keep every {placeholder} exactly as written and add no numbers.\n\n" + "\n".join(t.phrasings)
     )
-    resp = client.chat.completions.create(model=model, messages=[{"role": "user", "content": prompt}], temperature=0.7, max_tokens=400)
+    resp = client.chat.completions.create(model=model, messages=[{"role": "user", "content": prompt}], temperature=0.7, max_tokens=4000)
+    # DECISION: 4000 tokens. Super reasons before answering; at 400 the reasoning
+    # used the whole budget and most templates came back with no variants.
     lines = [ln.strip(" -•\t") for ln in (resp.choices[0].message.content or "").splitlines()]
     keep = [ln for ln in lines if ln and all(f"{{{s}}}" in ln for s in t.slots if any(f"{{{s}}}" in p for p in t.phrasings))]
     return t.phrasings + tuple(dict.fromkeys(keep))
@@ -95,10 +101,12 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=6000)
     ap.add_argument("--paraphrase", action="store_true")
     ap.add_argument("--starts", type=int, default=6, help="starting planes per liver command that needs a cut")
+    ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args()
 
     rng = random.Random(SEED)
     phr = {t.id: t.phrasings for t in TEMPLATES}
+    cache = json.loads(PARAPHRASES.read_text()) if PARAPHRASES.exists() else {}
     if args.paraphrase:
         from openai import OpenAI
 
@@ -109,7 +117,12 @@ def main() -> int:
             sys.exit("--paraphrase needs NEBIUS_TF_API_KEY and NEBIUS_TF_MODEL_SUPER")
         client = OpenAI(api_key=s.tf_api_key, base_url=s.tf_base_url)
         for t in TEMPLATES:
-            phr[t.id] = paraphrase(t, client, s.model_super)
+            if t.id not in cache:
+                cache[t.id] = list(paraphrase(t, client, s.model_super))
+        PARAPHRASES.write_text(json.dumps(cache, indent=1, ensure_ascii=False) + "\n")
+    for t in TEMPLATES:
+        if t.id in cache:
+            phr[t.id] = tuple(cache[t.id])
 
     kinds = cases_by_kind()
     pool = []
@@ -135,14 +148,14 @@ def main() -> int:
     for r in rows:
         if r["split"] == "train" and rng.random() < 0.1:
             r["split"] = "val"
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUT.open("w") as f:
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    with args.out.open("w") as f:
         for i, r in enumerate(rows):
             f.write(json.dumps({"id": f"c{i:05d}", **r}) + "\n")
 
     by_split = Counter(r["split"] for r in rows)
     by_t = Counter(r["template"] for r in rows)
-    print(f"{len(rows)} commands ({len(pool)} unique) -> {OUT.relative_to(ROOT)}")
+    print(f"{len(rows)} commands ({len(pool)} unique) -> {args.out}")
     print("splits:", dict(by_split))
     print("clarify share: {:.1%}".format(sum(v for k, v in by_t.items() if k.startswith("clarify")) / len(rows)))
     return 0
