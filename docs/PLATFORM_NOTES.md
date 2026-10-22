@@ -44,10 +44,17 @@ curl -s https://api.tokenfactory.nebius.com/v1/models?verbose=true \
   -H "Authorization: Bearer $NEBIUS_API_KEY" | jq '.data[] | {id, context_length, pricing, supported_features}'
 ```
 
-| Model ID | context_length | price in / out per 1M | supported_features (tools? json?) | Notes |
+Verified 2026-10-22 with our key (28 models listed; NVIDIA rows below).
+
+| Model ID | context_length | price in / out per 1M | supported_features | Notes |
 |---|---|---|---|---|
-| TBD | | | | |
-| TBD | | | | |
+| `nvidia/nemotron-3-super-120b-a12b` | 262,144 | $0.30 / $0.90 (cache read $0.06) | tools, reasoning | **verified**: `tools` request returned a valid `measure{"what":"flr"}` call in 1.08 s (392 in / 50 out tokens, 24 reasoning) |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262,144 | $0.06 / $0.24 | tools, reasoning | Nano-family candidate for the few-shot baseline (not tested yet) |
+| `nvidia/Nemotron-3_5-Lightning` | 1,048,576 | $0.06 / $0.24 | tools, reasoning | listed |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | 1,048,576 | $1.00 / $3.00 | tools, reasoning | listed |
+| `nvidia/Nemotron-3.5-Super-VL` | 1,048,576 | $0.30 / $0.90 | tools, reasoning | listed |
+
+`nvidia/NVIDIA-Nemotron-Nano-9B-v2` is not served on Token Factory (verified: absent from the list).
 
 ## 2. Token Factory Nemotron Nano with tool calling
 
@@ -215,3 +222,13 @@ Fallback if vLLM LoRA fails on NemotronH: merge the adapter in PEFT (`PeftModel.
 - [ ] VISTA-3D: bundle versus NIM on Nebius (the NIM needs an NGC key). Measure seconds per liver CT on L40S, and check that point coordinates match our viewer's voxel indexing (x,y,z order).
 - [ ] Weights license conflict (NOML vs NCLS v1) for VISTA-3D: confirm which applies to the checkpoint we use.
 - [ ] Tavily key: check the free 1,000 credits and test `include_domains` filtering on medical domains.
+
+## Account state (verified 2026-10-22 with the CLI, v0.12.294)
+
+| Fact | Value | Status |
+|---|---|---|
+| Tenant | `tenant-e00er0mmfz65nbq1kn` (hackathon-jv8) | verified |
+| Project we use | `project-e00dsq9rpr00td1s892p1d` (default-project-eu-north1), region eu-north1 | verified |
+| Project state | `suspension_state: SUSPENDED` (console shows "Billing: Not configured") | verified, blocking |
+| GPU platforms in eu-north1 | gpu-h100-sxm, gpu-h200-sxm, gpu-l40s-a, gpu-l40s-d, gpu-gb300 | verified |
+| Quota eu-north1 | compute GPUs: H100 8, H200 8, L40S 8; `msp.cloudapps.gpu.h100` 16 (H200 and L40S 0); **non-GPU vCPU 0** | verified |

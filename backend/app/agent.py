@@ -151,7 +151,7 @@ def run_turn(
     # Final round: the text must be grounded in this turn's tool results.
     results = tool_results_in(history)
     bodies = [b for _, b in results]
-    reply = msg.content or ""
+    reply = (msg.content or "").strip()
     check = ground.ground_check(reply, bodies, text)
     rejected = 0
     fallback = False
@@ -175,7 +175,7 @@ def run_turn(
             prompt_tokens += getattr(usage2, "prompt_tokens", 0) or 0
         if completion_tokens is not None:
             completion_tokens += getattr(usage2, "completion_tokens", 0) or 0
-        reply = resp2.choices[0].message.content or ""
+        reply = (resp2.choices[0].message.content or "").strip()
         check = ground.ground_check(reply, bodies, text)
         if metrics_dir:
             ground.log(metrics_dir, {"kind": "check", "turn": turn_id, "attempt": 2, "model": model, "text": reply, "passed": check.passed, "rejected": check.rejected})

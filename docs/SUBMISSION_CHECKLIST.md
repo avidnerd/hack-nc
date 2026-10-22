@@ -3,7 +3,7 @@
 Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal deadline Oct 29, 8:00 PM ET; hard deadline Oct 30, 10:00 AM PT).
 
 - [ ] At least one **NVIDIA open model** used **at runtime** (Nemotron 3 Super, Nemotron Nano 9B v2 + our LoRA, VISTA-3D / NV-Segment-CT, optionally Parakeet)
-  - [ ] Nemotron 3 Super called at runtime from the backend (M0)
+  - [x] Nemotron 3 Super called at runtime from the backend (M0; verified 2026-10-22 through the app palette, local backend)
   - [ ] Nano 9B v2 + LoRA served at runtime (M3)
   - [ ] VISTA-3D runs at runtime (M2)
 - [ ] Runtime use of **Nebius Token Factory** inference API
