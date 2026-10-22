@@ -1,0 +1,1 @@
+{"ts":"2026-10-22T17:30:57Z","kind":"job","name":"smoke-gpu","id":"aijob-e00g6ers8ps7qkxt6s","gpu":"H100 80GB","gpus":1,"wall_s_create_to_done":126,"container_s":0.3,"note":"nvidia-smi smoke test"}

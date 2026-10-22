@@ -229,6 +229,8 @@ Fallback if vLLM LoRA fails on NemotronH: merge the adapter in PEFT (`PeftModel.
 |---|---|---|
 | Tenant | `tenant-e00er0mmfz65nbq1kn` (hackathon-jv8) | verified |
 | Project we use | `project-e00dsq9rpr00td1s892p1d` (default-project-eu-north1), region eu-north1 | verified |
-| Project state | `suspension_state: SUSPENDED` (console shows "Billing: Not configured") | verified, blocking |
+| Project state | Was `SUSPENDED` ("Billing: Not configured"); `ACTIVE` after billing was set up on 2026-10-22 | verified |
 | GPU platforms in eu-north1 | gpu-h100-sxm, gpu-h200-sxm, gpu-l40s-a, gpu-l40s-d, gpu-gb300 | verified |
 | Quota eu-north1 | compute GPUs: H100 8, H200 8, L40S 8; `msp.cloudapps.gpu.h100` 16 (H200 and L40S 0); **non-GPU vCPU 0** | verified |
+| Serverless quota | Jobs on `cpu-d3` fail with `ResourceExhausted ... compute.instance.non-gpu.vcpu (limit 0, requested 4)`: Serverless CPU workloads count against the compute vCPU quota, not `msp.cloudapps.cpu` (272) | verified |
+| GPU Job smoke test | `nebius ai job create --image nvidia/cuda:12.4.1-base-ubuntu22.04 --platform gpu-h100-sxm --preset 1gpu-16vcpu-200gb --disk-size 100Gi --timeout 1h --restart-policy never --async` ran `nvidia-smi`: NVIDIA H100 80GB HBM3, 81559 MiB, driver 580.173.02. States PROVISIONING (~50 s) -> STARTING -> IMAGE_PULLING -> COMPLETED; about 2 min from create to done. No `--subnet-id` needed | verified |
