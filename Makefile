@@ -1,5 +1,5 @@
 # Scrub+ v2. `make help` lists targets.
-.PHONY: help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
+.PHONY: vista-smoke vista-gallery help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -62,3 +62,9 @@ eval: ## Eval every configured model on the test split -> metrics/results.json
 	cd backend && uv run python ../distill/eval.py run --model super
 	cd backend && if [ -n "$$NANO_BASE_URL" ]; then uv run python ../distill/eval.py run --model nano && uv run python ../distill/eval.py run --model nano-lora; fi
 	cd backend && uv run python ../distill/eval.py report
+
+vista-smoke: ## VISTA-3D full-scan Job on one MSD case (Nebius Serverless, H100)
+	bash vista/job/launch.sh vista/job/batch_smoke.json
+
+vista-gallery: ## VISTA-3D full-scan Job on the 8 gallery cases, with Dice against MSD labels
+	bash vista/job/launch.sh vista/job/batch_gallery.json

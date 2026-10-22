@@ -1,0 +1,8 @@
+[
+ {
+  "ct": "/data/raw/imagesTr/liver_24.nii.gz",
+  "case": "msd_liver_24",
+  "name": "Liver - MSD Task03 case 24",
+  "truth": "/data/raw/labelsTr/liver_24.nii.gz"
+ }
+]

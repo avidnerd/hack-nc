@@ -1,0 +1,50 @@
+[
+ {
+  "ct": "/data/raw/imagesTr/liver_24.nii.gz",
+  "case": "msd_liver_24",
+  "name": "Liver - MSD Task03 case 24",
+  "truth": "/data/raw/labelsTr/liver_24.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_30.nii.gz",
+  "case": "msd_liver_30",
+  "name": "Liver - MSD Task03 case 30",
+  "truth": "/data/raw/labelsTr/liver_30.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_39.nii.gz",
+  "case": "msd_liver_39",
+  "name": "Liver - MSD Task03 case 39",
+  "truth": "/data/raw/labelsTr/liver_39.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_47.nii.gz",
+  "case": "msd_liver_47",
+  "name": "Liver - MSD Task03 case 47",
+  "truth": "/data/raw/labelsTr/liver_47.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_56.nii.gz",
+  "case": "msd_liver_56",
+  "name": "Liver - MSD Task03 case 56",
+  "truth": "/data/raw/labelsTr/liver_56.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_59.nii.gz",
+  "case": "msd_liver_59",
+  "name": "Liver - MSD Task03 case 59",
+  "truth": "/data/raw/labelsTr/liver_59.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_62.nii.gz",
+  "case": "msd_liver_62",
+  "name": "Liver - MSD Task03 case 62",
+  "truth": "/data/raw/labelsTr/liver_62.nii.gz"
+ },
+ {
+  "ct": "/data/raw/imagesTr/liver_70.nii.gz",
+  "case": "msd_liver_70",
+  "name": "Liver - MSD Task03 case 70",
+  "truth": "/data/raw/labelsTr/liver_70.nii.gz"
+ }
+]
