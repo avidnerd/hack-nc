@@ -7,6 +7,7 @@ set -a; . ./.env; set +a
 S3="aws s3 --endpoint-url $NEBIUS_S3_ENDPOINT --only-show-errors"
 $S3 cp distill/job/train.py "s3://$NEBIUS_S3_BUCKET/code/distill/job/train.py"
 $S3 cp distill/job/diag.py "s3://$NEBIUS_S3_BUCKET/code/distill/job/diag.py"
+$S3 cp distill/job/merge.py "s3://$NEBIUS_S3_BUCKET/code/distill/job/merge.py"
 $S3 cp distill/job/run.sh "s3://$NEBIUS_S3_BUCKET/code/distill/job/run.sh"
 $S3 sync distill/data "s3://$NEBIUS_S3_BUCKET/distill/data" --exclude "*" --include "sft_*.jsonl"
 RUN=${RUN:-lora-$(date +%m%d-%H%M)}

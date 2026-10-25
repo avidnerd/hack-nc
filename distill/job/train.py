@@ -7,8 +7,8 @@ Hyperparameters are the brief's: r 16, alpha 32, lr 1e-4, 2 epochs, max seq
 4096. Loss is on assistant turns only (the tool calls and the final text),
 not on the system prompt, state or tool results the engine wrote.
 
-DECISION: LoRA targets attention and the MLP up projection only (q/k/v/o_proj,
-up_proj), not the Mamba in_proj/out_proj, so vLLM can serve the adapter
+DECISION: LoRA targets attention and the MLP up projection in layers 8-55 (see
+TARGETS), not the Mamba in_proj/out_proj, so vLLM can serve the adapter
 without merging (docs/DECISIONS.md, 2026-10-19).
 
 --dry-run loads only the tokenizer, renders every example with the chat
@@ -24,11 +24,13 @@ import time
 from pathlib import Path
 
 BASE = "nvidia/NVIDIA-Nemotron-Nano-9B-v2"
-# DECISION: no down_proj. Nemotron-H's MLP is squared-ReLU, so down_proj sees
-# very large inputs; with LoRA on it the first run's grad norm sat near 1e8,
-# clipping shrank every other adapter's step to nothing and eval loss stayed
-# flat (0.822 at step 100, 0.828 at step 150).
+# DECISION: attention + MLP up_proj, layers 8 to 55 only. Nemotron-H's MLP is
+# squared-ReLU, and LoRA on up_proj in layers 1, 3 and 5 gets gradients ~2e7
+# (everything else <= 1e3), so global clipping shrank every other update to
+# nothing and runs 2-3 did not learn (eval loss 0.71 -> 1.79). distill/job/diag.py
+# on one batch, 30 steps: as before 0.79 -> 0.79; this set 0.79 -> 0.07.
 TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj"]
+LAYERS = list(range(8, 56))
 
 
 def load(path: Path) -> list[dict]:
@@ -133,7 +135,8 @@ def main() -> int:
     model = AutoModelForCausalLM.from_pretrained(BASE, torch_dtype=torch.bfloat16, trust_remote_code=True, device_map="cuda")
     model.gradient_checkpointing_enable()
     model.enable_input_require_grads()
-    model = get_peft_model(model, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, target_modules=TARGETS, task_type="CAUSAL_LM"))
+    model = get_peft_model(model, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, target_modules=TARGETS,
+                                             layers_to_transform=LAYERS, layers_pattern="layers", task_type="CAUSAL_LM"))
     model.print_trainable_parameters()
 
     strip = lambda xs: [{k: v for k, v in x.items() if k != "len"} for x in xs]  # noqa: E731
@@ -177,7 +180,7 @@ def main() -> int:
         **stats,
         "wall_s": round(wall),
         "gpu": torch.cuda.get_device_name(0),
-        "hparams": {"r": 16, "alpha": 32, "lr": a.lr, "epochs": a.epochs, "max_len": a.max_len, "targets": TARGETS},
+        "hparams": {"r": 16, "alpha": 32, "lr": a.lr, "epochs": a.epochs, "max_len": a.max_len, "targets": TARGETS, "layers": [LAYERS[0], LAYERS[-1]]},
         "base_eval_loss": base_eval["eval_loss"],
         "history": trainer.state.log_history,
     }
