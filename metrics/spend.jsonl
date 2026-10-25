@@ -2,3 +2,6 @@
 {"ts":"2026-10-22T18:22:10Z","kind":"job","name":"vista3d-full gallery (8 cases)","id":"aijob-e00qxmqdpj6pq02kk4","gpu":"H100 80GB","gpus":1,"container_s":276,"note":"started 18:17:34Z, finished 18:22:10Z; provisioning not included"}
 {"ts":"2026-10-22T18:11:53Z","kind":"job","name":"vista3d-full smoke x3 (2 failed, 1 ok)","gpu":"H100 80GB","gpus":1,"note":"each about 4m41s provisioning + 1-2 min running"}
 {"ts":"2026-10-22T22:00:00Z","kind":"token_factory","name":"teacher traces (5,744 cmds + 573 retries) + paraphrases","model":"nvidia/nemotron-3-super-120b-a12b","prompt_tokens":29801365,"completion_tokens":1362453,"usd_from_token_counts":10.17,"note":"first pass only; retry tokens not summed here"}
+{"ts":"2026-10-24T19:37:55Z","kind":"job","name":"distill-nano lora-1024-1328 (diverged, cancel did not take)","id":"aijob-e00hewc87nzk1sdd81","gpu":"H100 80GB","gpus":1,"container_s":7479}
+{"ts":"2026-10-24T17:20:00Z","kind":"job","name":"distill-nano lora-1024-1237 (cancelled, not learning)","id":"aijob-e00ccw8ggw75v7mye3","gpu":"H100 80GB","gpus":1,"note":"about 45 min running"}
+{"ts":"2026-10-24T16:37:25Z","kind":"job","name":"distill-nano lora-1024-1226 (pad token error)","id":"aijob-e00hmavhs8arqry6s5","gpu":"H100 80GB","gpus":1,"note":"about 6 min running"}

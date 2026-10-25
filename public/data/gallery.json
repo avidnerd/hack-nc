@@ -1,0 +1,85 @@
+{
+ "source": "metrics/vista_runs.jsonl",
+ "cases": [
+  {
+   "id": "msd_liver_24",
+   "name": "Liver - MSD Task03 case 24",
+   "organMl": 1451.973,
+   "tumorMl": 0.0,
+   "diceLiver": 0.9622,
+   "diceTumor": 0.0,
+   "vistaS": 6.23,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_30",
+   "name": "Liver - MSD Task03 case 30",
+   "organMl": 2331.437,
+   "tumorMl": 9.466,
+   "diceLiver": 0.98,
+   "diceTumor": 0.6354,
+   "vistaS": 4.57,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_39",
+   "name": "Liver - MSD Task03 case 39",
+   "organMl": 3251.089,
+   "tumorMl": 259.606,
+   "diceLiver": 0.9714,
+   "diceTumor": 0.8408,
+   "vistaS": 5.49,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_47",
+   "name": "Liver - MSD Task03 case 47",
+   "organMl": 1381.943,
+   "tumorMl": 0.0,
+   "diceLiver": 0.9665,
+   "diceTumor": null,
+   "vistaS": 4.97,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_56",
+   "name": "Liver - MSD Task03 case 56",
+   "organMl": 2194.718,
+   "tumorMl": 237.848,
+   "diceLiver": 0.9628,
+   "diceTumor": 0.8178,
+   "vistaS": 5.68,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_59",
+   "name": "Liver - MSD Task03 case 59",
+   "organMl": 1393.217,
+   "tumorMl": 0.0,
+   "diceLiver": 0.9687,
+   "diceTumor": 0.0,
+   "vistaS": 4.67,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_62",
+   "name": "Liver - MSD Task03 case 62",
+   "organMl": 1148.966,
+   "tumorMl": 1.027,
+   "diceLiver": 0.9678,
+   "diceTumor": 0.5487,
+   "vistaS": 3.71,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "id": "msd_liver_70",
+   "name": "Liver - MSD Task03 case 70",
+   "organMl": 1024.136,
+   "tumorMl": 23.343,
+   "diceLiver": 0.9589,
+   "diceTumor": 0.6093,
+   "vistaS": 5.79,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  }
+ ]
+}

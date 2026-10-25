@@ -15,6 +15,7 @@ The router (Nano-LoRA first, Super on escalation) arrives in M3.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -26,6 +27,10 @@ from .tools import tool_specs, validate_call
 
 PROMPT_VERSION = "agent_v1"
 SYSTEM_PROMPT = (REPO / "prompts" / f"{PROMPT_VERSION}.md").read_text()
+
+# Served model names on the scrub-nano endpoint (distill/serve/launch.sh).
+NANO_BASE_NAME = os.environ.get("NANO_BASE_NAME", "base")
+NANO_LORA_NAME = os.environ.get("NANO_LORA_NAME", "scrub")
 
 
 class ChatClient(Protocol):
@@ -62,13 +67,19 @@ class AgentResult:
         return asdict(self)
 
 
-def build_messages(text: str, state: dict[str, Any] | None, history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def build_messages(
+    text: str, state: dict[str, Any] | None, history: list[dict[str, Any]] | None, model: str | None = None
+) -> list[dict[str, Any]]:
     # DECISION: one system message. Nemotron Nano's chat template renders only
     # messages[0] as system and silently drops any later system message, so
     # the state rides in the first one for every model.
     system = SYSTEM_PROMPT
     if state:
         system += "\n\nCurrent state (from get_state):\n" + json.dumps(state, separators=(",", ":"))
+    if model in (NANO_BASE_NAME, NANO_LORA_NAME):
+        # Nano 9B v2 reasons unless told not to; the LoRA was trained this way
+        # (distill/job/train.py) and the agent runs without a reasoning trace.
+        system = system.rstrip() + "\n/no_think"
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}, {"role": "user", "content": text}]
     messages.extend(history or [])
     return messages
@@ -115,7 +126,7 @@ def run_turn(
     history: list[dict[str, Any]] | None = None,
     metrics_dir: Path | None = None,
 ) -> AgentResult:
-    messages = build_messages(text, state, history)
+    messages = build_messages(text, state, history, model)
 
     t0 = time.perf_counter()
     resp = _complete(client, model, messages, timeout_s)

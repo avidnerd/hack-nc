@@ -38,6 +38,7 @@ export const SHORTCUT_HELP: [string, string][] = [
   ['D', 'play the recorded demo'],
   ['K', 'anatomy / CT volume view'],
   ['H', 'gesture tutorial (practice object)'],
+  ['G', 'case gallery (VISTA-3D on Nebius)'],
   ['I', 'upload a CT (.nii / .nii.gz, optional label map); or drop the files'],
   ['Shift+G', 'teach gestures (labelled recording)'],
   ['V', 'webcam preview'],
@@ -62,6 +63,8 @@ export interface KeyboardHooks {
   upload: () => void;
   /** Opens the typed command palette (`/`). */
   palette: () => void;
+  /** Opens the case gallery (`g`). */
+  gallery: () => void;
 }
 
 export function installKeyboard(hooks: KeyboardHooks): void {
@@ -170,6 +173,9 @@ export function installKeyboard(hooks: KeyboardHooks): void {
         break;
       case 'D':
         hooks.toggleRecorder();
+        break;
+      case 'g':
+        hooks.gallery();
         break;
       case 'G':
         hooks.teach();

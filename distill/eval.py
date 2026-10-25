@@ -1,6 +1,7 @@
 """Evaluate models on the held-out test commands (CLAUDE.md section 5.6).
 
     cd backend && uv run python ../distill/eval.py run --model super      # Token Factory
+    cd backend && uv run python ../distill/eval.py run --model nano-tf    # Token Factory, Nemotron 3 Nano 30B
     cd backend && uv run python ../distill/eval.py run --model nano       # our endpoint, base weights
     cd backend && uv run python ../distill/eval.py run --model nano-lora  # our endpoint, + LoRA
     cd backend && uv run python ../distill/eval.py report                 # -> metrics/results.json
@@ -35,13 +36,17 @@ sys.path.insert(0, str(ROOT / "distill"))
 
 import loop  # noqa: E402
 import verify  # noqa: E402
+from app import agent  # noqa: E402
 
 DATA = ROOT / "distill" / "data"
 METRICS = ROOT / "metrics"
 
-# USD per 1M tokens (in, out). DECISION: filled only from the logged-in Token
-# Factory prices page (docs/PLATFORM_NOTES.md); until then cost shows "-".
-PRICES: dict[str, tuple[float, float]] = {}
+# USD per 1M tokens (in, out), from GET /v1/models?verbose=true on 2026-10-22
+# (metrics/tf_models.json, docs/PLATFORM_NOTES.md).
+PRICES: dict[str, tuple[float, float]] = {
+    "nvidia/nemotron-3-super-120b-a12b": (0.30, 0.90),
+    "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": (0.06, 0.24),
+}
 
 
 def p95(xs: list[float]) -> float | None:
@@ -99,10 +104,14 @@ def client_for(name: str):
         if not (s.tf_api_key and s.model_super):
             sys.exit("needs NEBIUS_TF_API_KEY and NEBIUS_TF_MODEL_SUPER")
         return OpenAI(api_key=s.tf_api_key, base_url=s.tf_base_url, max_retries=0), s.model_super
+    if name == "nano-tf":
+        # The Nano-family baseline Token Factory serves (Nano 9B v2 is not listed there).
+        return OpenAI(api_key=s.tf_api_key, base_url=s.tf_base_url, max_retries=0), os.environ.get("NEBIUS_TF_MODEL_NANO", "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     url = os.environ.get("NANO_BASE_URL")
     if not url:
         sys.exit("needs NANO_BASE_URL (the scrub-nano endpoint, .../v1)")
-    model = os.environ.get("NANO_LORA_NAME", "scrub-lora") if name == "nano-lora" else os.environ.get("NANO_BASE_NAME", "nvidia/NVIDIA-Nemotron-Nano-9B-v2")
+    # Served model names set by distill/serve/launch.sh.
+    model = agent.NANO_LORA_NAME if name == "nano-lora" else agent.NANO_BASE_NAME
     return OpenAI(api_key=os.environ.get("NANO_API_KEY", "none"), base_url=url, max_retries=0), model
 
 
@@ -150,7 +159,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--model", required=True, choices=["super", "nano", "nano-lora", "oracle"])
+    r.add_argument("--model", required=True, choices=["super", "nano-tf", "nano", "nano-lora", "oracle"])
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--limit", type=int, default=0)
     sub.add_parser("report")

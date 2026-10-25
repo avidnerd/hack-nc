@@ -7,8 +7,8 @@ Hyperparameters are the brief's: r 16, alpha 32, lr 1e-4, 2 epochs, max seq
 4096. Loss is on assistant turns only (the tool calls and the final text),
 not on the system prompt, state or tool results the engine wrote.
 
-DECISION: LoRA targets attention and MLP projections only (q/k/v/o_proj,
-up/down_proj), not the Mamba in_proj/out_proj, so vLLM can serve the adapter
+DECISION: LoRA targets attention and the MLP up projection only (q/k/v/o_proj,
+up_proj), not the Mamba in_proj/out_proj, so vLLM can serve the adapter
 without merging (docs/DECISIONS.md, 2026-10-19).
 
 --dry-run loads only the tokenizer, renders every example with the chat
@@ -24,7 +24,11 @@ import time
 from pathlib import Path
 
 BASE = "nvidia/NVIDIA-Nemotron-Nano-9B-v2"
-TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj", "down_proj"]
+# DECISION: no down_proj. Nemotron-H's MLP is squared-ReLU, so down_proj sees
+# very large inputs; with LoRA on it the first run's grad norm sat near 1e8,
+# clipping shrank every other adapter's step to nothing and eval loss stayed
+# flat (0.822 at step 100, 0.828 at step 150).
+TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "up_proj"]
 
 
 def load(path: Path) -> list[dict]:
@@ -103,6 +107,9 @@ def main() -> int:
     from transformers import AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
+    if tok.pad_token is None:
+        # Nano ships no pad token; padded positions carry label -100 and attention 0.
+        tok.pad_token = tok.eos_token
     train = [x for ex in load(a.data / "sft_train.jsonl") for x in tokenize(tok, ex, a.max_len)]
     val = [x for ex in load(a.data / "sft_val.jsonl") for x in tokenize(tok, ex, a.max_len)]
     lens = sorted(x["len"] for x in train)
@@ -141,18 +148,24 @@ def main() -> int:
         bf16=True,
         logging_steps=10,
         eval_strategy="steps",
-        eval_steps=50,
+        eval_steps=100,
         save_strategy="no",
         report_to=[],
+        # Plain log lines instead of a progress bar: the job log keeps only
+        # recent output and carriage-return bars push the loss lines out.
+        disable_tqdm=True,
         seed=20261020,
     )
     trainer = Trainer(
         model=model,
         args=args,
         train_dataset=strip(train),
-        eval_dataset=strip(val),
+        # Every other val turn (fixed): a full eval pass costs 91 s on an H100.
+        eval_dataset=strip(val[::2]),
         data_collator=DataCollatorForSeq2Seq(tok, padding=True, label_pad_token_id=-100),
     )
+    base_eval = trainer.evaluate()
+    print(json.dumps({"base_eval_loss": base_eval["eval_loss"]}), flush=True)
     t0 = time.time()
     trainer.train()
     wall = time.time() - t0
@@ -165,6 +178,7 @@ def main() -> int:
         "wall_s": round(wall),
         "gpu": torch.cuda.get_device_name(0),
         "hparams": {"r": 16, "alpha": 32, "lr": a.lr, "epochs": a.epochs, "max_len": a.max_len, "targets": TARGETS},
+        "base_eval_loss": base_eval["eval_loss"],
         "history": trainer.state.log_history,
     }
     (a.out / "train_log.json").write_text(json.dumps(log, indent=2))

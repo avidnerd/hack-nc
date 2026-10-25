@@ -38,7 +38,8 @@ import {
   planMarkdown,
   type PatientFacts,
 } from './ai/narrate.ts';
-import { CASES, loadCase } from './caseLoader.ts';
+import { CASES, isGalleryCase, loadCase, loadGallery } from './caseLoader.ts';
+import { Gallery } from './ui/gallery.ts';
 import { cameraBasis, clamp, cross, dot, easeInOut, length, lerp, normalize, scale, slerp, sub } from './coords.ts';
 import { StentSession } from './devices/stentSession.ts';
 import { GestureTracker } from './input/gestures.ts';
@@ -139,6 +140,7 @@ hands.onFrame = (obs, t) => handControl.update(gestures.update(obs, t), t);
 
 const optimizer = new OptimizerClient();
 const palette = new CommandPalette((text) => runCommand(text, text, 'palette'));
+const gallery = new Gallery(loadGallery, (id) => switchCase(id));
 const hood = new UnderTheHood();
 new GroundingCounter(document.querySelector('.tb-left') as HTMLElement);
 const speech = new Speech();
@@ -201,6 +203,7 @@ async function boot(): Promise<void> {
     tutorial: () => void tutorial.open(),
     upload: () => void pickAndUpload(),
     palette: () => palette.open(),
+    gallery: () => gallery.toggle(),
   });
   installDrop((files) => void uploadScan(files));
   installTopActions();
@@ -290,6 +293,7 @@ function installTopActions(): void {
     bar.append(b);
   };
   mk('Practice', 'Gesture tutorial (H)', () => void tutorial.open());
+  mk('Gallery', 'Precomputed scans segmented by VISTA-3D on Nebius (G)', () => gallery.toggle());
   mk('Upload CT', 'Load a .nii / .nii.gz CT, optionally with a label map (I); or drop the files anywhere', () => void pickAndUpload());
   mk('Type a command', 'Command palette (/): type a request instead of speaking it', () => palette.open());
   mk('Under the hood', 'Live log of agent calls: model, latency, tools, grounding', () => hood.toggle());
@@ -475,7 +479,7 @@ async function playDemo(): Promise<void> {
 }
 
 async function switchCase(id: string): Promise<void> {
-  const known = CASES.find((c) => c.id === id) ?? CASES[0];
+  const known = isGalleryCase(id) ? { id } : (CASES.find((c) => c.id === id) ?? CASES[0]);
   try {
     await loadCaseData(await loadCase(known.id), known.id);
   } catch (err) {

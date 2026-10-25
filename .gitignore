@@ -33,3 +33,6 @@ distill/data/traces_*.jsonl
 distill/data/sft_*.jsonl
 distill/data/eval_*.jsonl
 .claude/worktrees/
+
+# Gallery assets (vista/gallery.py); hosted from VITE_GALLERY_URL
+public/data/gallery/

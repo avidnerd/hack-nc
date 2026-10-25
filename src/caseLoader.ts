@@ -14,6 +14,33 @@ import { setLoading } from './state.ts';
 
 const DATA_ROOT = 'data';
 
+/**
+ * Gallery cases: MSD scans segmented by VISTA-3D on Nebius (vista/job/). The
+ * manifest is small and ships with the app; the assets live at
+ * VITE_GALLERY_URL (a public bucket in the hosted build), always gzipped.
+ * DECISION: locally they are copied to public/data/gallery/ by vista/gallery.py.
+ */
+export const GALLERY_ROOT: string = import.meta.env.VITE_GALLERY_URL ?? `${DATA_ROOT}/gallery`;
+
+export interface GalleryEntry {
+  id: string;
+  name: string;
+  organMl: number;
+  tumorMl: number;
+  /** VISTA-3D vs the MSD reference mask, 0 to 1. */
+  diceLiver: number;
+  diceTumor: number | null;
+  /** VISTA-3D inference time and GPU, from metrics/vista_runs.jsonl. */
+  vistaS: number;
+  gpu: string;
+}
+
+export async function loadGallery(): Promise<GalleryEntry[]> {
+  return (await fetchJson<{ cases: GalleryEntry[] }>(`${DATA_ROOT}/gallery.json`)).cases;
+}
+
+export const isGalleryCase = (id: string): boolean => id.startsWith('msd_');
+
 export class CaseLoadError extends Error {
   constructor(
     message: string,
@@ -49,8 +76,9 @@ async function fetchGzipBytes(
 function fetchBytes(
   url: string,
   onProgress?: (received: number, total: number) => void,
+  gz = GZ_DATA,
 ): Promise<Uint8Array> {
-  return GZ_DATA ? fetchGzipBytes(url, onProgress) : fetchRawBytes(url, onProgress);
+  return gz ? fetchGzipBytes(url, onProgress) : fetchRawBytes(url, onProgress);
 }
 
 /** Fetch with a progress callback driven by Content-Length. */
@@ -120,7 +148,9 @@ function expectedVoxels(meta: CaseMeta): number {
  * reflects real bytes rather than a fake animation.
  */
 export async function loadCase(id: string): Promise<CaseData> {
-  const base = `${DATA_ROOT}/${id}`;
+  const gallery = isGalleryCase(id);
+  const base = gallery ? `${GALLERY_ROOT}/${id}` : `${DATA_ROOT}/${id}`;
+  const gz = gallery || GZ_DATA;
 
   setLoading('Reading case header', 4);
   const meta = await fetchJson<CaseMeta>(`${base}/meta.json`);
@@ -133,7 +163,7 @@ export async function loadCase(id: string): Promise<CaseData> {
   setLoading('Loading CT volume', 8);
   const volume = await fetchBytes(`${base}/volume.u8`, (got, total) => {
     setLoading('Loading CT volume', 8 + 42 * (got / Math.max(total, 1)));
-  });
+  }, gz);
   if (volume.length !== want) {
     throw new CaseLoadError(
       `volume.u8 is ${volume.length} bytes but meta.shape implies ${want}`,
@@ -143,7 +173,7 @@ export async function loadCase(id: string): Promise<CaseData> {
   setLoading('Loading segmentations', 52);
   const labels = await fetchBytes(`${base}/labels.u8`, (got, total) => {
     setLoading('Loading segmentations', 52 + 36 * (got / Math.max(total, 1)));
-  });
+  }, gz);
   if (labels.length !== want) {
     throw new CaseLoadError(
       `labels.u8 is ${labels.length} bytes but meta.shape implies ${want}`,
@@ -168,7 +198,7 @@ export async function loadCase(id: string): Promise<CaseData> {
   try {
     setLoading('Loading anatomy', 94);
     const table = await fetchJson<{ positionsBytes: number; meshes: MeshEntry[] }>(`${base}/meshes.json`);
-    const bin = await fetchBytes(`${base}/meshes.bin`);
+    const bin = await fetchBytes(`${base}/meshes.bin`, undefined, gz);
     const buf = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
     meshes = {
       entries: table.meshes,

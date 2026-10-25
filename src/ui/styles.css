@@ -1382,3 +1382,47 @@ body.dropping::after {
 .hood-verdict.bad {
   color: var(--amber);
 }
+
+/* Case gallery: the palette's dialog with a list of precomputed scans. */
+.gallery-title {
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.gallery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.gallery-case {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  cursor: pointer;
+}
+.gallery-case:hover,
+.gallery-case:focus-visible {
+  border-color: var(--accent-dim);
+  outline: none;
+}
+.gallery-name {
+  font-size: 13px;
+}
+.gallery-facts {
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.gallery.busy .gallery-case {
+  opacity: 0.5;
+  pointer-events: none;
+}

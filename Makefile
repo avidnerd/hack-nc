@@ -1,5 +1,5 @@
 # Scrub+ v2. `make help` lists targets.
-.PHONY: vista-smoke vista-gallery help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
+.PHONY: distill-train vista-smoke vista-gallery help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -68,3 +68,6 @@ vista-smoke: ## VISTA-3D full-scan Job on one MSD case (Nebius Serverless, H100)
 
 vista-gallery: ## VISTA-3D full-scan Job on the 8 gallery cases, with Dice against MSD labels
 	bash vista/job/launch.sh vista/job/batch_gallery.json
+
+distill-train: ## LoRA fine-tune Nano 9B v2 on the verified traces (Nebius Serverless Job, H100)
+	bash distill/job/launch.sh
