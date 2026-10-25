@@ -2,6 +2,27 @@
 
 Every number here comes from a file in `metrics/`. Unmeasured cells show `—`.
 
+## Agent: success, latency and cost on held-out commands
+
+Source: `metrics/results.json` (`make eval`). 256 test commands that no model was trained on, each run end to end with the Python engine executing every tool call, scored by the same verifier that filtered the training data:
+
+- **Task success**: the command's goal predicate holds on the final engine state (for example `margin >= 10 and vessels_crossed == 0`).
+- **Schema valid**: every tool call matched its JSON schema.
+- **Grounded**: every number in the model's own final reply came from a tool result this turn (`ground_check`), without a rewrite or template fallback.
+- **Latency**: request to final tool call, end to end.
+
+| Model | Task success | Schema valid | Grounded | Median latency | p95 latency | Cost per 1,000 commands |
+|---|---|---|---|---|---|---|
+| Nemotron 3 Super (Token Factory) | 77.3 % | 99.6 % | 88.7 % | 1.2 s | 4.6 s | $1.98 |
+| Nemotron 3 Nano 30B A3B, few-shot (Token Factory) | 46.1 % | 100.0 % | 96.5 % | 7.1 s | 13.2 s | $0.61 |
+| Nemotron Nano 9B v2, base (our Nebius endpoint) | — | — | — | — | — | — |
+| Nemotron Nano 9B v2 + our LoRA (our Nebius endpoint) | — | — | — | — | — | — |
+| Router: Nano-LoRA first, Super on escalation | — | — | — | — | — | — |
+
+Cost method:
+- Nemotron 3 Super (Token Factory): tokens x price (0.3/0.9 USD per 1M in/out).
+- Nemotron 3 Nano 30B A3B, few-shot (Token Factory): tokens x price (0.06/0.24 USD per 1M in/out).
+
 ## VISTA-3D on Nebius (full-scan Serverless Job)
 
 Source: `metrics/vista_runs.jsonl`. One NVIDIA H100 80GB HBM3 on Nebius AI Cloud (eu-north1). Model `nvidia/NV-Segment-CT` (VISTA-3D), class prompts for the 8 structures the app plans on. Dice = 2|A∩B| / (|A|+|B|): the overlap between VISTA-3D's mask and the MSD Task03 reference mask, from 0 (none) to 1 (identical). Liver Dice counts tumour as liver on both sides.

@@ -7,12 +7,12 @@ On one fixed batch of 4 training turns:
   1. loss in eval mode vs train mode (no grad): a gap means the training-mode
      kernel path computes something different from the inference path;
   2. per-module gradient norms after one backward, largest first;
-  3. 15 optimizer steps overfitting that batch, for each setup:
-       A  as trained (bf16, gradient checkpointing, config use_cache)
-       B  A with use_cache=False
-       C  B without gradient checkpointing
-       D  B with fp32 weights
+  3. 30 optimizer steps overfitting that batch, for each setup.
      A healthy setup drives the loss down; a broken one does not.
+
+Run 1 (2026-10-25) found train == eval loss, finite grads, and up_proj LoRA B in
+layers 1/3/5 at ~2e7 grad norm vs <=1e3 elsewhere; nothing learned in 15 steps
+with bf16 or fp32, with or without use_cache. Run 2 compares target sets:
 Prints one JSON line per result.
 """
 
@@ -40,7 +40,7 @@ def batch(tok, data: Path, n: int = 4) -> dict:
     return {"input_ids": ids.cuda(), "labels": lab.cuda(), "attention_mask": att.cuda()}
 
 
-def build(dtype, use_cache: bool | None, gc: bool):
+def build(dtype, use_cache: bool | None, gc: bool, targets=TARGETS, layers=None):
     from peft import LoraConfig, get_peft_model
     from transformers import AutoModelForCausalLM
 
@@ -50,7 +50,12 @@ def build(dtype, use_cache: bool | None, gc: bool):
     if gc:
         m.gradient_checkpointing_enable()
         m.enable_input_require_grads()
-    return get_peft_model(m, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.0, target_modules=TARGETS, task_type="CAUSAL_LM"))
+    if layers is not None:
+        # Only modules in these layer indices (regex over the full module name).
+        alt = "|".join(targets)
+        lay = "|".join(str(i) for i in layers)
+        targets = rf".*\.layers\.({lay})\.mixer\.({alt})$"
+    return get_peft_model(m, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.0, target_modules=targets, task_type="CAUSAL_LM"))
 
 
 def out(**kw) -> None:
@@ -69,16 +74,18 @@ def main() -> int:
     b = batch(tok, a.data)
     out(test="batch", shape=list(b["input_ids"].shape), target_tokens=int((b["labels"] != -100).sum()))
 
+    attn = ["q_proj", "k_proj", "v_proj", "o_proj"]
+    # name: (targets, layers or None, clip or None)
     setups = {
-        "A_as_trained": (torch.bfloat16, None, True),
-        "B_no_cache": (torch.bfloat16, False, True),
-        "C_no_cache_no_gc": (torch.bfloat16, False, False),
-        "D_fp32_no_cache": (torch.float32, False, True),
+        "E_attention_only": (attn, None, 1.0),
+        "F_all_targets_no_clip": (TARGETS, None, None),
+        "G_attn_up_from_layer_8": (attn + ["up_proj"], list(range(8, 56)), 1.0),
+        "H_attn_mamba": (attn + ["in_proj", "out_proj"], None, 1.0),
     }
-    for name, (dtype, use_cache, gc) in setups.items():
+    for name, (targets, layers, clip) in setups.items():
         m = None
         try:
-            m = build(dtype, use_cache, gc)
+            m = build(torch.bfloat16, False, True, targets, layers)
             with torch.no_grad():
                 m.eval()
                 le = m(**b).loss.item()
@@ -100,14 +107,15 @@ def main() -> int:
 
             opt = torch.optim.AdamW([p for p in m.parameters() if p.requires_grad], lr=1e-4)
             traj = []
-            for _ in range(15):
+            for _ in range(30):
                 loss = m(**b).loss
                 loss.backward()
-                gn = torch.nn.utils.clip_grad_norm_([p for p in m.parameters() if p.requires_grad], 1.0).item()
+                params = [p for p in m.parameters() if p.requires_grad]
+                gn = torch.nn.utils.clip_grad_norm_(params, clip if clip else float("inf")).item()
                 opt.step()
                 opt.zero_grad()
                 traj.append((round(loss.item(), 4), float(f"{gn:.3g}")))
-            out(test="overfit_15", setup=name, loss_gradnorm=traj)
+            out(test="overfit_30", setup=name, start=traj[0][0], end=traj[-1][0], loss_gradnorm=traj[::3])
         except Exception as e:  # one setup failing (e.g. OOM) must not hide the others
             out(test="error", setup=name, error=f"{type(e).__name__}: {e}"[:400])
         finally:
