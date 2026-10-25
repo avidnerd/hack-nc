@@ -1,0 +1,37 @@
+{
+  "generated": 1792950723.278896,
+  "models": [
+    {
+      "name": "nano-tf",
+      "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+      "n": 256,
+      "success": 0.4609,
+      "schema_valid": 1.0,
+      "grounded": 0.9648,
+      "kept": 0.4453,
+      "latency_ms_median": 7090.5,
+      "latency_ms_p95": 13232,
+      "errors": 0,
+      "tokens_in": 888270,
+      "tokens_out": 425640,
+      "cost_per_1k_usd": 0.6072,
+      "cost_method": "tokens x price (0.06/0.24 USD per 1M in/out)"
+    },
+    {
+      "name": "super",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "n": 256,
+      "success": 0.7734,
+      "schema_valid": 0.9961,
+      "grounded": 0.8867,
+      "kept": 0.6641,
+      "latency_ms_median": 1241,
+      "latency_ms_p95": 4626,
+      "errors": 21,
+      "tokens_in": 1475982,
+      "tokens_out": 70094,
+      "cost_per_1k_usd": 1.9761,
+      "cost_method": "tokens x price (0.3/0.9 USD per 1M in/out)"
+    }
+  ]
+}
