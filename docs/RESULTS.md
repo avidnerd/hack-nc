@@ -15,13 +15,14 @@ Source: `metrics/results.json` (`make eval`). 256 test commands that no model wa
 |---|---|---|---|---|---|---|
 | Nemotron 3 Super (Token Factory) | 77.3 % | 99.6 % | 88.7 % | 1.2 s | 4.6 s | $1.98 |
 | Nemotron 3 Nano 30B A3B, few-shot (Token Factory) | 46.1 % | 100.0 % | 96.5 % | 7.1 s | 13.2 s | $0.61 |
-| Nemotron Nano 9B v2, base (our Nebius endpoint) | — | — | — | — | — | — |
+| Nemotron Nano 9B v2, base (our Nebius endpoint) | 46.1 % | 98.4 % | 98.8 % | 0.9 s | 1.2 s | $0.39 |
 | Nemotron Nano 9B v2 + our LoRA (our Nebius endpoint) | — | — | — | — | — | — |
 | Router: Nano-LoRA first, Super on escalation | — | — | — | — | — | — |
 
 Cost method:
 - Nemotron 3 Super (Token Factory): tokens x price (0.3/0.9 USD per 1M in/out).
 - Nemotron 3 Nano 30B A3B, few-shot (Token Factory): tokens x price (0.06/0.24 USD per 1M in/out).
+- Nemotron Nano 9B v2, base (our Nebius endpoint): H100 GPU-seconds during the eval run x $4.5/h, 8 concurrent requests.
 
 ## VISTA-3D on Nebius (full-scan Serverless Job)
 

@@ -1,5 +1,5 @@
 {
-  "generated": 1792950723.278896,
+  "generated": 1792954277.8605509,
   "models": [
     {
       "name": "nano-tf",
@@ -16,6 +16,22 @@
       "tokens_out": 425640,
       "cost_per_1k_usd": 0.6072,
       "cost_method": "tokens x price (0.06/0.24 USD per 1M in/out)"
+    },
+    {
+      "name": "nano",
+      "model": "base",
+      "n": 256,
+      "success": 0.4609,
+      "schema_valid": 0.9844,
+      "grounded": 0.9883,
+      "kept": 0.457,
+      "latency_ms_median": 908.0,
+      "latency_ms_p95": 1240,
+      "errors": 0,
+      "tokens_in": 689300,
+      "tokens_out": 16378,
+      "cost_per_1k_usd": 0.3857,
+      "cost_method": "H100 GPU-seconds during the eval run x $4.5/h, 8 concurrent requests"
     },
     {
       "name": "super",

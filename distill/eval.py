@@ -43,6 +43,10 @@ METRICS = ROOT / "metrics"
 
 # USD per 1M tokens (in, out), from GET /v1/models?verbose=true on 2026-10-22
 # (metrics/tf_models.json, docs/PLATFORM_NOTES.md).
+# Our endpoint (docs/PLATFORM_NOTES.md, Nebius on-demand H100 from 2026-10-08).
+H100_USD_PER_HOUR = 4.50
+ENDPOINT_MODELS = ("nano", "nano-lora")
+
 PRICES: dict[str, tuple[float, float]] = {
     "nvidia/nemotron-3-super-120b-a12b": (0.30, 0.90),
     "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": (0.06, 0.24),
@@ -75,7 +79,8 @@ def score(rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
         if run:
             usd = sum(g["gpu_seconds"] * g["usd_per_gpu_hour"] / 3600 for g in run)
             cost = round(usd / n * 1000, 4)
-            method = "GPU-seconds x GPU price during the eval run"
+            w = run[-1].get("workers")
+            method = f"H100 GPU-seconds during the eval run x ${run[-1]['usd_per_gpu_hour']}/h, {w} concurrent requests"
     return {
         "name": name,
         "model": model,
@@ -139,7 +144,14 @@ def run(name: str, workers: int, limit: int) -> None:
         for fut in as_completed(futs):
             tr = fut.result()
             f.write(json.dumps({**tr, "verify": verify.verify(tr)}) + "\n")
-    print(f"{name}: done in {time.time() - t0:.0f} s -> {out.relative_to(ROOT)}")
+    wall = time.time() - t0
+    print(f"{name}: done in {wall:.0f} s -> {out.relative_to(ROOT)}")
+    if name in ENDPOINT_MODELS and todo:
+        # Our endpoint is one dedicated H100 for the whole run: its cost is the
+        # run's wall time at the GPU price, at this run's concurrency.
+        with (METRICS / "spend.jsonl").open("a") as f:
+            f.write(json.dumps({"ts": time.time(), "kind": "eval", "eval": name, "commands": len(todo), "workers": workers,
+                                "gpu": "H100 80GB", "gpu_seconds": round(wall, 1), "usd_per_gpu_hour": H100_USD_PER_HOUR}) + "\n")
 
 
 def report() -> None:
