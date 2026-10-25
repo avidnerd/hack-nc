@@ -103,6 +103,8 @@ def main() -> int:
     ap.add_argument("--max-len", type=int, default=4096)
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--grad-accum", type=int, default=4)
+    ap.add_argument("--max-grad-norm", type=float, default=1.0, help="0 turns global clipping off")
+    ap.add_argument("--eval-steps", type=int, default=100)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -151,8 +153,16 @@ def main() -> int:
         bf16=True,
         logging_steps=10,
         eval_strategy="steps",
-        eval_steps=100,
-        save_strategy="no",
+        eval_steps=a.eval_steps,
+        # Keep the best adapter by eval loss: run 3 was best early and got
+        # worse later, and a run saved only at the end loses that.
+        save_strategy="steps",
+        save_steps=a.eval_steps,
+        save_total_limit=1,
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        max_grad_norm=a.max_grad_norm,  # 0 disables clipping in the HF Trainer
         report_to=[],
         # Plain log lines instead of a progress bar: the job log keeps only
         # recent output and carriage-return bars push the loss lines out.
@@ -182,6 +192,9 @@ def main() -> int:
         "gpu": torch.cuda.get_device_name(0),
         "hparams": {"r": 16, "alpha": 32, "lr": a.lr, "epochs": a.epochs, "max_len": a.max_len, "targets": TARGETS, "layers": [LAYERS[0], LAYERS[-1]]},
         "base_eval_loss": base_eval["eval_loss"],
+        "best_eval_loss": trainer.state.best_metric,
+        "best_step": int(trainer.state.best_model_checkpoint.rsplit("-", 1)[-1]) if trainer.state.best_model_checkpoint else None,
+        "max_grad_norm": a.max_grad_norm,
         "history": trainer.state.log_history,
     }
     (a.out / "train_log.json").write_text(json.dumps(log, indent=2))
