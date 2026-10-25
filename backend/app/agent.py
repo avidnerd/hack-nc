@@ -9,7 +9,9 @@ through ground_check (ground.py) before anyone sees it:
     fail            -> logged, regenerated once with the allowed numbers listed
     fail again      -> replaced by a template sentence built from the tool results
 
-The router (Nano-LoRA first, Super on escalation) arrives in M3.
+route_turn is the router (CLAUDE.md section 4.3): our Nano-LoRA endpoint
+first, Nemotron 3 Super when Nano is unconfigured, fails, times out, returns
+an invalid call, or plans more than two calls in one round.
 """
 
 from __future__ import annotations
@@ -61,6 +63,7 @@ class AgentResult:
     done: bool = False
     assistant_message: dict[str, Any] | None = None
     escalated: bool = False
+    escalation_reason: str | None = None
     grounding: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -213,6 +216,41 @@ def run_turn(
     )
 
 
+# Rounds that plan more calls than this go to Super (section 4.3: multi-step).
+MAX_NANO_CALLS = 2
+
+
+def route_turn(
+    nano: tuple[ChatClient, str, float] | None,
+    super_: tuple[ChatClient, str, float],
+    text: str,
+    state: dict[str, Any] | None,
+    history: list[dict[str, Any]] | None = None,
+    metrics_dir: Path | None = None,
+) -> AgentResult:
+    """One round through the router. `nano` and `super_` are (client, model, timeout_s)."""
+    reason = None
+    if nano is not None:
+        client, model, timeout_s = nano
+        try:
+            r = run_turn(client, model, text, state, timeout_s, history=history, metrics_dir=metrics_dir)
+            if not r.valid:
+                reason = "invalid_call"
+            elif len(r.tool_calls) > MAX_NANO_CALLS:
+                reason = "multi_step"
+            elif r.done and r.grounding and r.grounding.get("fallback"):
+                reason = "ungrounded"
+            else:
+                return r
+        except Exception as e:  # timeout, connection, endpoint stopped
+            reason = type(e).__name__
+    client, model, timeout_s = super_
+    r = run_turn(client, model, text, state, timeout_s, history=history, metrics_dir=metrics_dir)
+    r.escalated = nano is not None
+    r.escalation_reason = reason
+    return r
+
+
 def log_request(settings: Settings, text: str, result: AgentResult | None, error: str | None = None) -> None:
     settings.metrics_dir.mkdir(parents=True, exist_ok=True)
     row = {
@@ -225,6 +263,7 @@ def log_request(settings: Settings, text: str, result: AgentResult | None, error
         "tools": [c.name for c in result.tool_calls] if result else [],
         "valid": result.valid if result else False,
         "escalated": result.escalated if result else False,
+        "escalation_reason": result.escalation_reason if result else None,
         "done": result.done if result else None,
         "error": error,
     }

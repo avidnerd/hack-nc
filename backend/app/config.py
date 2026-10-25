@@ -22,6 +22,10 @@ class Settings:
     tf_base_url: str
     model_super: str | None
     super_timeout_s: float
+    nano_base_url: str | None
+    nano_api_key: str | None
+    nano_model: str
+    nano_timeout_s: float
     metrics_dir: Path
     allowed_origins: list[str]
 
@@ -34,6 +38,11 @@ def load() -> Settings:
         tf_base_url=os.environ.get("NEBIUS_TF_BASE_URL", "https://api.tokenfactory.nebius.com/v1/"),
         model_super=os.environ.get("NEBIUS_TF_MODEL_SUPER") or None,
         super_timeout_s=float(os.environ.get("SUPER_TIMEOUT_S", "6.0")),
+        # The scrub-nano endpoint (distill/serve/launch.sh). Unset: Super only.
+        nano_base_url=os.environ.get("NANO_BASE_URL") or None,
+        nano_api_key=os.environ.get("NANO_API_KEY") or None,
+        nano_model=os.environ.get("NANO_ROUTER_MODEL", "scrub"),
+        nano_timeout_s=float(os.environ.get("NANO_TIMEOUT_S", "1.5")),
         metrics_dir=Path(os.environ.get("METRICS_DIR", str(REPO / "metrics"))),
         allowed_origins=[o for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o],
     )

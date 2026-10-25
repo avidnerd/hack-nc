@@ -58,3 +58,49 @@ def test_turn_sends_tools_at_temperature_zero_and_validates():
 def test_turn_flags_a_bad_tool_call():
     r = agent.run_turn(FakeClient([call("measure", {"what": "iq"})]), "m", "x", None, 6.0)
     assert not r.valid and r.tool_calls[0].arguments is None and r.tool_calls[0].errors
+
+
+class Boom:
+    """A client whose call raises, like a stopped endpoint or a timeout."""
+
+    def __init__(self):
+        def create(**kw):
+            raise TimeoutError("nano timed out")
+
+        self.chat = NS(completions=NS(create=create))
+
+
+def test_router_keeps_a_valid_nano_answer():
+    nano, sup = FakeClient([call("measure", {"what": "flr"})]), FakeClient([call("measure", {"what": "margin"})])
+    r = agent.route_turn((nano, "scrub", 1.5), (sup, "super", 6.0), "flr?", None)
+    assert r.model == "scrub" and not r.escalated and sup.sent is None
+    assert nano.sent["timeout"] == 1.5
+
+
+def test_router_escalates_invalid_multistep_and_failed_nano():
+    sup = FakeClient([call("measure", {"what": "margin"})])
+    bad = FakeClient([call("measure", {"what": "iq"})])
+    r = agent.route_turn((bad, "scrub", 1.5), (sup, "super", 6.0), "x", None)
+    assert r.model == "super" and r.escalated and r.escalation_reason == "invalid_call"
+
+    many = FakeClient([call("measure", {"what": "flr"}, f"c{i}") for i in range(3)])
+    r = agent.route_turn((many, "scrub", 1.5), (sup, "super", 6.0), "x", None)
+    assert r.escalation_reason == "multi_step"
+
+    r = agent.route_turn((Boom(), "scrub", 1.5), (sup, "super", 6.0), "x", None)
+    assert r.model == "super" and r.escalation_reason == "TimeoutError"
+
+
+def test_router_without_nano_is_super_only():
+    sup = FakeClient([call("measure", {"what": "flr"})])
+    r = agent.route_turn(None, (sup, "super", 6.0), "x", None)
+    assert r.model == "super" and not r.escalated and r.escalation_reason is None
+
+
+def test_nano_models_get_no_think_and_super_does_not():
+    nano = FakeClient([call("measure", {"what": "flr"})])
+    agent.run_turn(nano, agent.NANO_LORA_NAME, "x", {"case_id": "liver"}, 1.5)
+    assert nano.sent["messages"][0]["content"].endswith("\n/no_think")
+    sup = FakeClient([call("measure", {"what": "flr"})])
+    agent.run_turn(sup, "super", "x", {"case_id": "liver"}, 6.0)
+    assert "/no_think" not in sup.sent["messages"][0]["content"]
