@@ -7,12 +7,14 @@
  * same code path as a keypress.
  */
 
+import { findCard } from '../devices/deviceRules.ts';
 import type { OptimizePriority, PresetName } from '../types.ts';
 
 export type Intent =
   | { kind: 'window'; preset: PresetName }
   | { kind: 'show'; structure: string; on: boolean }
-  | { kind: 'placeStent' }
+  /** `device`: a rule card id ("size for a Gore Excluder"); the stent is checked against its IFU limits. */
+  | { kind: 'placeStent'; device?: string }
   | { kind: 'removeDevice' }
   /**
    * Re-seat the cut. Limits spoken with the request ("with a 30 mm margin")
@@ -474,6 +476,15 @@ export function parseIntent(text: string): Intent | null {
   if (/\bliver (window|preset)\b/.test(s)) return { kind: 'window', preset: 'liver' };
 
   /* --- device ------------------------------------------------------------ */
+  // "size for a Gore Excluder", "place an Excluder": a device with a rule card.
+  const named = /\b(size|sizing|fit|place|deploy|put|use|try|stent|graft)\b.*?\b(?:for|with|an?|the)\s+(.+)$/.exec(s);
+  if (named) {
+    const words = named[2].split(/\s+/);
+    for (let n = words.length; n > 0; n--) {
+      const card = findCard(words.slice(0, n).join(' '));
+      if (card) return { kind: 'placeStent', device: card.id };
+    }
+  }
   if (/\b(place|deploy|put|insert|drop|add)\b.*\b(stent|graft|device)\b/.test(s)) {
     return { kind: 'placeStent' };
   }

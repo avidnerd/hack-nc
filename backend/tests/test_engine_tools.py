@@ -165,7 +165,7 @@ def test_resect(liver: Session) -> None:
 
 
 def test_place_stent(aorta: Session) -> None:
-    out = execute(aorta, "place_stent", {"device_id": "gore_excluder"})
+    out = execute(aorta, "place_stent", {"device_id": "generic"})
     assert set(out) == {"device_id", "s0_mm", "length_mm", "diameter_mm", "oversize_pct", "rules", "rules_source", "seals"}
     assert out["rules_source"] == "default"
     assert out["seals"] is True
@@ -212,7 +212,29 @@ def test_show_and_window(liver: Session) -> None:
 
 def test_unavailable_tools(liver: Session) -> None:
     assert execute(liver, "segment_point", {"xyz_mm": [1, 2, 3]})["error"] == "unavailable"
-    assert execute(liver, "lookup_device_rules", {"device_name": "Gore Excluder"})["error"] == "unavailable"
+
+
+def test_lookup_device_rules(liver: Session) -> None:
+    card = execute(liver, "lookup_device_rules", {"device_name": "GORE EXCLUDER AAA Endoprosthesis"})
+    assert card["device_id"] == "gore-excluder" and card["rules_source"] == "ifu:gore-excluder"
+    assert card["rules"] == {"neck_length_min_mm": 15, "neck_diameter_mm": [19, 32], "neck_angulation_max_deg": 60}
+    assert card["not_found"] == ["oversize_pct"]
+    assert all(src["url"].startswith("https://") and src["quote"] for src in card["sources"])
+    missing = execute(liver, "lookup_device_rules", {"device_name": "Nellix"})
+    assert missing["error"] == "not_found" and missing["rules_source"] == "default"
+
+
+def test_device_card_drives_stent_verdict(aorta: Session) -> None:
+    # The aorta case's neck (18.6 mm) is under the Excluder's sourced 19 mm minimum.
+    default = execute(aorta, "place_stent", {"device_id": "generic"})
+    assert default["seals"] and default["rules_source"] == "default"
+    assert [r["id"] for r in default["rules"]] == ["renal", "neck_length", "oversize", "angulation"]
+    gore = execute(aorta, "place_stent", {"device_id": "Gore Excluder"})
+    assert gore["rules_source"] == "ifu:gore-excluder" and not gore["seals"]
+    by_id = {r["id"]: r for r in gore["rules"]}
+    assert by_id["neck_length"]["limit"] == 15.0 and by_id["angulation"]["limit"] == 60.0
+    assert by_id["neck_diameter"] == {"id": "neck_diameter", "pass": False, "value": 18.6, "limit": [19.0, 32.0], "unit": "mm"}
+    assert aorta.stent.fail_reason == "Neck diameter 18.6 millimeters, below the device minimum of 19"
 
 
 def test_write_plan(liver: Session) -> None:

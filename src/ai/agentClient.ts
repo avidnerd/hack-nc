@@ -95,6 +95,17 @@ async function getJson<T>(url: string, timeoutMs = 4000): Promise<T | null> {
   }
 }
 
+/**
+ * A live device rule lookup (backend /api/rules: Tavily, then Nemotron 3
+ * Super, then verbatim checks). Null without a backend or on any failure; the
+ * caller then keeps the default rules.
+ */
+export async function fetchDeviceRules<T>(deviceName: string): Promise<T | null> {
+  if (!BACKEND_CONFIGURED) return null;
+  // Two Tavily searches and up to two Super calls: about 30 s cold.
+  return getJson<T>(`${apiUrl('rules')}?device=${encodeURIComponent(deviceName)}`, 60_000);
+}
+
 /** One request, no loop. Null on any failure. Kept for the M0 check (`window.scrub.agent`). */
 export async function askAgent(
   text: string,

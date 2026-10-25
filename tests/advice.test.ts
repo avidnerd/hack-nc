@@ -35,7 +35,7 @@ const stent = (o: Partial<StentState>): AdviceFacts => ({
   planeOn: false,
   metrics: null,
   stent: {
-    s0: 148, lengthMm: 25, diameterMm: 23, neckMm: 25, oversizePct: 15, angulationDeg: 10,
+    s0: 148, lengthMm: 25, diameterMm: 23, neckMm: 25, neckMeanMm: 20, oversizePct: 15, angulationDeg: 10,
     seals: true, verdict: 'Seals.', failReason: null, ...o,
   },
   thresholds: DEFAULT_THRESHOLDS,

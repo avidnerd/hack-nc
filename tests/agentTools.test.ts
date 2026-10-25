@@ -20,7 +20,8 @@ import {
   type OptimizeOutcome,
 } from '../src/ai/tools.ts';
 import { Centerline } from '../src/devices/centerline.ts';
-import { evaluateStent, ostiaOnCenterline, placeStent, sizeAt } from '../src/devices/stent.ts';
+import { findCard, limitsFor } from '../src/devices/deviceRules.ts';
+import { DEFAULT_LIMITS, evaluateStent, ostiaOnCenterline, oversizeOf, placeStent, sizeAt } from '../src/devices/stent.ts';
 import type { CenterlineData, PlanMetrics } from '../src/types.ts';
 
 const tools = JSON.parse(readFileSync(new URL('../shared/tools.json', import.meta.url), 'utf8')) as {
@@ -87,9 +88,27 @@ describe('tool result helpers', () => {
     expect(rules[1].value).toBe(r1(st.neckMm));
     expect(rules[2].limit).toEqual([10, 20]);
     expect(rules[3].unit).toBe('deg');
-    const out = stentOut(st, 'gore_excluder', ostia);
-    expect(out).toMatchObject({ device_id: 'gore_excluder', seals: true, s0_mm: r1(st.s0), rules_source: 'default' });
+    const out = stentOut(st, 'generic', ostia);
+    expect(out).toMatchObject({ device_id: 'generic', seals: true, s0_mm: r1(st.s0), rules_source: 'default' });
     expect(Object.keys(out).sort()).toEqual(['device_id', 'diameter_mm', 'length_mm', 'oversize_pct', 'rules', 'rules_source', 's0_mm', 'seals']);
+  });
+
+  it("checks a device with a rule card against its IFU limits", () => {
+    // The aorta case's neck (18.6 mm) is under the Gore Excluder's sourced 19 mm minimum.
+    const lim = limitsFor('Gore Excluder');
+    expect(lim).toMatchObject({ source: 'ifu:gore-excluder', neckMinMm: 15, neckDiameterMm: [19, 32], angulationMaxDeg: 60, angulationInclusive: true });
+    expect(oversizeOf(lim)).toBe(0.15);
+    const st = placeStent(cl, ostia, undefined, undefined, lim);
+    expect(st.seals).toBe(false);
+    expect(st.failReason).toBe('Neck diameter 18.6 millimeters, below the device minimum of 19');
+    const rules = stentRules(st, ostia, lim);
+    expect(rules.map((r) => r.id)).toEqual(['renal', 'neck_length', 'neck_diameter', 'oversize', 'angulation']);
+    expect(rules[2]).toEqual({ id: 'neck_diameter', pass: false, value: 18.6, limit: [19, 32], unit: 'mm' });
+    expect(stentOut(st, 'gore_excluder', ostia)).toMatchObject({ rules_source: 'ifu:gore-excluder', seals: false });
+    expect(ruleOfReason(st.failReason)).toBe('neck_diameter');
+    expect(findCard('excluder')?.id).toBe('gore-excluder');
+    expect(findCard('generic')).toBeNull();
+    expect(limitsFor('generic')).toBe(DEFAULT_LIMITS);
   });
 
   it('flags the renal rule when the graft covers an ostium', () => {

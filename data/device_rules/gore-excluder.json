@@ -1,0 +1,54 @@
+{
+  "id": "gore-excluder",
+  "device": "Gore Excluder",
+  "aliases": [
+    "Gore Excluder",
+    "GORE EXCLUDER AAA Endoprosthesis",
+    "Excluder"
+  ],
+  "fetched": "2026-10-25",
+  "query": "Gore Excluder instructions for use indications aortic neck length diameter angulation oversizing",
+  "search_results": [
+    "https://www.goremedical.com/products/excluder/specifications",
+    "https://www.goremedical.com/value-summary/aortic",
+    "https://www.goremedical.com/products/excluder/mri-safety",
+    "https://www.goremedical.com/products/excluder",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf23/P230023B.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf23/P230023C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030S014C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf21/P210032C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf2/p020004b.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf2/p020004s123b.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf2/P020004c.pdf"
+  ],
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "fields": {
+    "neck_length_min_mm": {
+      "value": 15,
+      "quote": "a minimum aortic neck length of 15 mm",
+      "url": "https://www.goremedical.com/products/excluder/specifications"
+    },
+    "neck_diameter_mm": {
+      "value": [
+        19,
+        32
+      ],
+      "quote": "Infrarenal aortic neck treatment diameter range of 19–32 mm",
+      "url": "https://www.goremedical.com/products/excluder/specifications"
+    },
+    "neck_angulation_max_deg": {
+      "value": 60,
+      "quote": "Proximal aortic neck angulation ≤ 60°",
+      "url": "https://www.goremedical.com/products/excluder/specifications"
+    }
+  },
+  "dropped": [],
+  "timing_s": {
+    "total": 31.48
+  },
+  "usage": {
+    "prompt_tokens": 16348,
+    "completion_tokens": 3399
+  }
+}

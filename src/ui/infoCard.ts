@@ -22,6 +22,10 @@ export interface CardContent {
   notes?: string[];
   /** Small print under the notes, e.g. the source line. */
   foot?: string;
+  /** Source links (rule cards), opened in a new tab. */
+  links?: { label: string; href: string }[];
+  /** Override how long the card stays up. */
+  showMs?: number;
 }
 
 const SHOW_MS = 16000;
@@ -52,10 +56,19 @@ export class InfoCard {
     }
     for (const n of c.notes ?? []) this.el.append(div('info-note', n));
     if (c.foot) this.el.append(div('info-foot', c.foot));
+    for (const l of c.links ?? []) {
+      const a = document.createElement('a');
+      a.className = 'info-link';
+      a.href = l.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = l.label;
+      this.el.append(a);
+    }
     this.el.classList.add('show');
     document.body.classList.add('card-open');
     clearTimeout(this.timer);
-    this.timer = window.setTimeout(() => this.hide(), SHOW_MS);
+    this.timer = window.setTimeout(() => this.hide(), c.showMs ?? SHOW_MS);
   }
 
   hide(): void {

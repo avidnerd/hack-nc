@@ -741,8 +741,10 @@
           "method": "mean lumen diameter over the first 15 mm below the stent's proximal end, sampled every 1 mm"
         },
         {
-          "found": true,
-          "moved_mm": 0,
+          "found": false,
+          "failing_rule": "renal"
+        },
+        {
           "device_id": "gore_excluder",
           "s0_mm": 78.7,
           "length_mm": 80,
@@ -760,7 +762,17 @@
               "id": "neck_length",
               "pass": true,
               "value": 31,
-              "limit": 10,
+              "limit": 15,
+              "unit": "mm"
+            },
+            {
+              "id": "neck_diameter",
+              "pass": false,
+              "value": 18.6,
+              "limit": [
+                19,
+                32
+              ],
               "unit": "mm"
             },
             {
@@ -781,60 +793,18 @@
               "unit": "deg"
             }
           ],
-          "rules_source": "default",
-          "seals": true
-        },
-        {
-          "device_id": "gore_excluder",
-          "s0_mm": 79,
-          "length_mm": 80,
-          "diameter_mm": 21.3,
-          "oversize_pct": 15,
-          "rules": [
-            {
-              "id": "renal",
-              "pass": true,
-              "value": 2.3,
-              "limit": 0,
-              "unit": "mm"
-            },
-            {
-              "id": "neck_length",
-              "pass": true,
-              "value": 40.5,
-              "limit": 10,
-              "unit": "mm"
-            },
-            {
-              "id": "oversize",
-              "pass": true,
-              "value": 15,
-              "limit": [
-                10,
-                20
-              ],
-              "unit": "%"
-            },
-            {
-              "id": "angulation",
-              "pass": true,
-              "value": 15.8,
-              "limit": 60,
-              "unit": "deg"
-            }
-          ],
-          "rules_source": "default",
-          "seals": true
+          "rules_source": "ifu:gore-excluder",
+          "seals": false
         },
         {
           "what": "neck_length",
-          "value": 40.5,
+          "value": 31,
           "unit": "mm",
           "method": "length distal to the stent's proximal end where lumen diameter stays within 10% of the 15 mm neck mean"
         },
         {
           "what": "neck_diameter",
-          "value": 18.5,
+          "value": 18.6,
           "unit": "mm",
           "method": "mean lumen diameter over the first 15 mm below the stent's proximal end, sampled every 1 mm"
         },
@@ -856,7 +826,17 @@
               "id": "neck_length",
               "pass": true,
               "value": 27,
-              "limit": 10,
+              "limit": 15,
+              "unit": "mm"
+            },
+            {
+              "id": "neck_diameter",
+              "pass": true,
+              "value": 20.3,
+              "limit": [
+                19,
+                32
+              ],
               "unit": "mm"
             },
             {
@@ -877,7 +857,7 @@
               "unit": "deg"
             }
           ],
-          "rules_source": "default",
+          "rules_source": "ifu:gore-excluder",
           "seals": false
         },
         {
@@ -906,6 +886,16 @@
               "unit": "mm"
             },
             {
+              "id": "neck_diameter",
+              "pass": false,
+              "value": 17.5,
+              "limit": [
+                19,
+                32
+              ],
+              "unit": "mm"
+            },
+            {
               "id": "oversize",
               "pass": true,
               "value": 15,
@@ -923,52 +913,12 @@
               "unit": "deg"
             }
           ],
-          "rules_source": "default",
-          "seals": true
+          "rules_source": "ifu:medtronic-endurant-ii",
+          "seals": false
         },
         {
-          "found": true,
-          "moved_mm": 0,
-          "device_id": "endurant",
-          "s0_mm": 135.3,
-          "length_mm": 60,
-          "diameter_mm": 20.1,
-          "oversize_pct": 15,
-          "rules": [
-            {
-              "id": "renal",
-              "pass": true,
-              "value": 58.6,
-              "limit": 0,
-              "unit": "mm"
-            },
-            {
-              "id": "neck_length",
-              "pass": true,
-              "value": 31.5,
-              "limit": 10,
-              "unit": "mm"
-            },
-            {
-              "id": "oversize",
-              "pass": true,
-              "value": 15,
-              "limit": [
-                10,
-                20
-              ],
-              "unit": "%"
-            },
-            {
-              "id": "angulation",
-              "pass": true,
-              "value": 5.1,
-              "limit": 60,
-              "unit": "deg"
-            }
-          ],
-          "rules_source": "default",
-          "seals": true
+          "found": false,
+          "failing_rule": "neck_diameter"
         },
         {
           "case_id": "aorta",
@@ -997,6 +947,16 @@
                 "unit": "mm"
               },
               {
+                "id": "neck_diameter",
+                "pass": false,
+                "value": 17.5,
+                "limit": [
+                  19,
+                  32
+                ],
+                "unit": "mm"
+              },
+              {
                 "id": "oversize",
                 "pass": true,
                 "value": 15,
@@ -1014,8 +974,8 @@
                 "unit": "deg"
               }
             ],
-            "rules_source": "default",
-            "seals": true
+            "rules_source": "ifu:medtronic-endurant-ii",
+            "seals": false
           },
           "thresholds": {
             "margin_min_mm": 10,
@@ -1047,7 +1007,17 @@
               "id": "neck_length",
               "pass": true,
               "value": 70,
-              "limit": 10,
+              "limit": 15,
+              "unit": "mm"
+            },
+            {
+              "id": "neck_diameter",
+              "pass": false,
+              "value": 16.6,
+              "limit": [
+                19,
+                32
+              ],
               "unit": "mm"
             },
             {
@@ -1068,8 +1038,8 @@
               "unit": "deg"
             }
           ],
-          "rules_source": "default",
-          "seals": true
+          "rules_source": "ifu:gore-excluder",
+          "seals": false
         },
         {
           "plane": {
@@ -1101,8 +1071,38 @@
           "method": "closest wall-to-wall gap: min voxel-centre distance (exact EDT, full-resolution labels) minus the mean voxel size"
         },
         {
-          "error": "unavailable",
-          "reason": "device rule lookup is not wired yet (M4); default simplified EVAR rules apply"
+          "device_id": "gore-excluder",
+          "device": "Gore Excluder",
+          "rules": {
+            "neck_length_min_mm": 15,
+            "neck_diameter_mm": [
+              19,
+              32
+            ],
+            "neck_angulation_max_deg": 60
+          },
+          "not_found": [
+            "oversize_pct"
+          ],
+          "sources": [
+            {
+              "field": "neck_length_min_mm",
+              "url": "https://www.goremedical.com/products/excluder/specifications",
+              "quote": "a minimum aortic neck length of 15 mm"
+            },
+            {
+              "field": "neck_diameter_mm",
+              "url": "https://www.goremedical.com/products/excluder/specifications",
+              "quote": "Infrarenal aortic neck treatment diameter range of 19–32 mm"
+            },
+            {
+              "field": "neck_angulation_max_deg",
+              "url": "https://www.goremedical.com/products/excluder/specifications",
+              "quote": "Proximal aortic neck angulation ≤ 60°"
+            }
+          ],
+          "rules_source": "ifu:gore-excluder",
+          "fetched": "2026-10-25"
         },
         {
           "ok": true,
@@ -1149,7 +1149,17 @@
                 "id": "neck_length",
                 "pass": true,
                 "value": 70,
-                "limit": 10,
+                "limit": 15,
+                "unit": "mm"
+              },
+              {
+                "id": "neck_diameter",
+                "pass": false,
+                "value": 16.6,
+                "limit": [
+                  19,
+                  32
+                ],
                 "unit": "mm"
               },
               {
@@ -1170,8 +1180,8 @@
                 "unit": "deg"
               }
             ],
-            "rules_source": "default",
-            "seals": true
+            "rules_source": "ifu:gore-excluder",
+            "seals": false
           },
           "thresholds": {
             "margin_min_mm": 10,
@@ -1209,7 +1219,17 @@
                 "id": "neck_length",
                 "pass": true,
                 "value": 70,
-                "limit": 10,
+                "limit": 15,
+                "unit": "mm"
+              },
+              {
+                "id": "neck_diameter",
+                "pass": false,
+                "value": 16.6,
+                "limit": [
+                  19,
+                  32
+                ],
                 "unit": "mm"
               },
               {
@@ -1230,8 +1250,8 @@
                 "unit": "deg"
               }
             ],
-            "rules_source": "default",
-            "seals": true
+            "rules_source": "ifu:gore-excluder",
+            "seals": false
           },
           "thresholds": {
             "margin_min_mm": 10,

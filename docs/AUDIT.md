@@ -12,6 +12,7 @@ Load average during the run: 6.5 to 8.3 (other work was running). Timing numbers
 | Unit tests | `npx vitest run` | 230 pass, 1 skipped, **1 to 3 fail** (timing only, see Flaky) |
 | Build | `npm run build` | Pass, 2.8 s. Main chunk 876 kB (253 kB gzip), Vite warns over 500 kB |
 | E2E | `npx playwright test` | **5 of 5 pass** in 1.8 min (demo stream, keyboard moments 2 to 4, copilot, tutorial, NIfTI upload) |
+| E2E (2026-10-25) | `npx playwright test --retries=0` | 9 tests. The demo-stream test passes alone (2 of 2) but can time out on the fist lock with 2 workers or a loaded machine: software WebGL drops frames and the recorded landmark stream is decimated. Run it alone (`--workers=1`) before reading a failure as a regression. |
 | Frame time | `node scripts/frametime.mjs` (new) | 60 fps locked, 256 ray steps, both cases, plane on and off. rAF median 16.7 ms, p95 17.7 ms. See `metrics/frametime.json` |
 
 Frame time is measured with hands off (no camera under automation). MediaPipe hand detection cost is not in this number; the app logs it in dev as `[perf] ... hand detect N ms`. Measure with a webcam before the video.

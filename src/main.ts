@@ -25,7 +25,8 @@ import {
   runAgentTurn,
   setAgentAvailable,
 } from './ai/agentClient.ts';
-import { executeTool, getState, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
+import { executeTool, getState, noteDevice, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
+import { findCard } from './devices/deviceRules.ts';
 import {
   changeLine,
   optimizeExplanation,
@@ -64,6 +65,7 @@ import { Tutorial, tutorialDone } from './tutorial/tutorial.ts';
 import { makePhantom } from './tutorial/phantom.ts';
 import { caseFromFiles, installDrop, pickFiles } from './io/upload.ts';
 import { InfoCard } from './ui/infoCard.ts';
+import { ruleCardContent } from './ui/ruleCard.ts';
 import { outcomes, suggestions, type AdviceFacts } from './ai/advice.ts';
 import { VolumeRenderer } from './render/volumeRenderer.ts';
 import {
@@ -402,6 +404,8 @@ setToolHost({
   dispatch: (intent) => dispatchIntent(intent, 'llm'),
   stentCenterline: () => stents.centerline,
   stentOstia: () => stents.renalOstia,
+  setStentDevice: (id) => stents.setDevice(id),
+  showRuleCard: (c) => infoCard.show(ruleCardContent(c)),
   placeStent: (s0, len) => stents.placeAt(s0, len),
   stent: () => stents.settled,
   setStent: (st) => stents.restore(st),
@@ -1501,9 +1505,17 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
 
     // These land once their milestone is in. Until then they say so rather
     // than failing silently, which keeps the keyboard map honest.
-    case 'placeStent':
+    case 'placeStent': {
+      // A named device: show its rule card, then place and check against it.
+      const card = intent.device ? findCard(intent.device) : null;
+      if (card && state.data?.meta.kind === 'aorta') {
+        noteDevice(card.id);
+        stents.setDevice(card.id);
+        infoCard.show(ruleCardContent(card));
+      }
       stents.place();
       break;
+    }
 
     case 'removeDevice':
       stents.remove();

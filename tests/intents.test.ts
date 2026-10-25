@@ -132,6 +132,17 @@ describe('intent grammar', () => {
     expect(parseIntent('hide the plane')).toEqual({ kind: 'plane', on: false });
   });
 
+  it('names a device with a rule card', () => {
+    const gore = { kind: 'placeStent', device: 'gore-excluder' };
+    expect(parseIntent('size for a gore excluder')).toEqual(gore);
+    expect(parseIntent('size for a Gore Excluder please')).toEqual(gore);
+    expect(parseIntent('place an excluder')).toEqual(gore);
+    expect(parseIntent('try a gore excluder graft')).toEqual(gore);
+    // No card for the device, or no device: the plain placement.
+    expect(parseIntent('place the stent')).toEqual({ kind: 'placeStent' });
+    expect(parseIntent('place a nellix stent')).toEqual({ kind: 'placeStent' });
+  });
+
   it('returns null for nonsense', () => {
     expect(parseIntent('what a lovely day')).toBeNull();
   });

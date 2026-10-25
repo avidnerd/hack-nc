@@ -1,0 +1,59 @@
+{
+  "id": "medtronic-endurant-ii",
+  "device": "Medtronic Endurant II",
+  "aliases": [
+    "Medtronic Endurant II"
+  ],
+  "fetched": "2026-10-25",
+  "query": "Medtronic Endurant II instructions for use indications aortic neck length diameter angulation oversizing",
+  "search_results": [
+    "https://www.medtronic.com/nl-nl/zorgprofessionals/producten/cardiovascular/aortic-stent-grafts/endurantii.html",
+    "https://www.medtronic.com/au-en/patients/treatments-therapies/stent-graft-aaa/endurantii-aaa-stent-graft-system.html",
+    "https://www.medtronic.com/en-us/healthcare-professionals/specialties/interventional-cardiology/therapies-procedures/aortic-endovascular-repair/clinical-evidence/randomized-controlled-trials.html",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf10/P100021S063D.pdf",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpma/pma.cfm?id=P100021S063",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf10/P100021c.pdf",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfmaude/detail.cfm?mdrfoi__id=6569961&pc=OTD",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfmaude/detail.cfm?mdrfoi__id=19413237&pc=MIH",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfmaude/detail.cfm?mdrfoi__id=21054889&pc=MIH",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfmaude/detail.cfm?mdrfoi__id=24065363&pc=MIH",
+    "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfmaude/detail.cfm?mdrfoi__id=24566693&pc=MIH"
+  ],
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "fields": {
+    "neck_diameter_mm": {
+      "value": [
+        19,
+        32
+      ],
+      "quote": "Aortic neck diameters with a range of 19 to 32 mm",
+      "url": "https://www.accessdata.fda.gov/cdrh_docs/pdf10/P100021S063D.pdf"
+    },
+    "neck_angulation_max_deg": {
+      "value": 60,
+      "quote": "Infrarenal neck angulation of ≤60°",
+      "url": "https://www.accessdata.fda.gov/cdrh_docs/pdf10/P100021S063D.pdf"
+    }
+  },
+  "dropped": [
+    {
+      "field": "neck_length_min_mm",
+      "reason": "quote not found verbatim in the source",
+      "proposed": {
+        "value": 4,
+        "quote": "≥ 4 and <10 mm",
+        "url": "https://www.accessdata.fda.gov/cdrh_docs/pdf10/P100021S063D.pdf"
+      },
+      "domains": [
+        "accessdata.fda.gov"
+      ]
+    }
+  ],
+  "timing_s": {
+    "total": 25.34
+  },
+  "usage": {
+    "prompt_tokens": 6829,
+    "completion_tokens": 2449
+  }
+}

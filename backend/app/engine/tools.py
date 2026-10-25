@@ -23,6 +23,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ..tools import validate_call
+from . import device_rules
 from .grid import Case, edt3d
 from .metrics import Metrics, Plane, evaluate_plane, normalize, project
 from .optimize import CONE_DEG, OFFSET_MM, Thresholds, optimize, violations
@@ -30,6 +31,7 @@ from .session import Session
 from .stent import (
     FALLBACK_S0,
     NECK_WINDOW_MM,
+    Limits,
     STENT_LENGTH_MM,
     StentState,
     evaluate_stent,
@@ -44,8 +46,6 @@ from .stent import (
 
 THRESHOLD_FIELDS = {"margin_min_mm": "margin_min", "flr_min_pct": "remnant_min"}
 PLANE_ID = "plane"
-# Which rules a device is checked against; M4's rule cards add sourced ones.
-RULES_SOURCE = "default"
 # measure distance gives up beyond this gap (smartMeasure.ts reach).
 REACH_MM = 120.0
 NO_CUT = "no cut placed yet; use set_plane or optimize_plane first"
@@ -74,7 +74,13 @@ def thresholds_json(th: Thresholds) -> dict[str, float]:
     return {"margin_min_mm": r1(th.margin_min), "flr_min_pct": r1(th.remnant_min)}
 
 
+def limits_for(device_id: str | None) -> Limits:
+    """The device's rule card limits (data/device_rules/), else the default simplified EVAR rules."""
+    return device_rules.limits_of(device_rules.find(device_id))
+
+
 def stent_json(device_id: str | None, st: StentState) -> dict[str, Any]:
+    lim = limits_for(device_id)
     return {
         "device_id": device_id,
         "s0_mm": r1(st.s0),
@@ -83,9 +89,9 @@ def stent_json(device_id: str | None, st: StentState) -> dict[str, Any]:
         "oversize_pct": r1(st.oversize_pct),
         "rules": [
             {**r, "value": r1(r["value"]), "limit": [r1(v) for v in r["limit"]] if isinstance(r["limit"], list) else r1(r["limit"])}
-            for r in rules(st)
+            for r in rules(st, lim)
         ],
-        "rules_source": RULES_SOURCE,
+        "rules_source": lim.source,
         "seals": st.seals,
     }
 
@@ -218,7 +224,7 @@ def _neck(s: Session) -> StentState:
     _need_aorta(s)
     if s.stent is not None:
         return s.stent
-    return place_stent(s.centerline, s.ostia, preferred_start(s.ostia, FALLBACK_S0))
+    return place_stent(s.centerline, s.ostia, preferred_start(s.ostia, FALLBACK_S0), lim=limits_for(s.device_id))
 
 
 def measure(s: Session, a: dict[str, Any]) -> dict[str, Any]:
@@ -357,13 +363,14 @@ def place_stent_tool(s: Session, a: dict[str, Any]) -> dict[str, Any]:
     cl, ostia = s.centerline, s.ostia
     # Clamped to the centerline like StentSession.placeAt.
     length = min(max(float(a.get("length_mm", STENT_LENGTH_MM)), 20.0), cl.length)
+    # DECISION: a device with a rule card (data/device_rules/) is checked and
+    # sized against it; any other device gets the default simplified EVAR rules.
+    lim = limits_for(a["device_id"])
     if "s0_mm" in a:
         s0 = min(max(float(a["s0_mm"]), 0.0), max_start(cl, length))
-        st = evaluate_stent(cl, ostia, s0, size_at(cl, s0), length)
+        st = evaluate_stent(cl, ostia, s0, size_at(cl, s0, lim), length, lim)
     else:
-        st = place_stent(cl, ostia, preferred_start(ostia, FALLBACK_S0), length)
-    # DECISION: device_id is echoed, not looked up; every device gets the
-    # default simplified EVAR rules until M4's rule cards replace them.
+        st = place_stent(cl, ostia, preferred_start(ostia, FALLBACK_S0), length, lim)
     s.stent, s.device_id = st, a["device_id"]
     return stent_json(s.device_id, st)
 
@@ -372,12 +379,13 @@ def optimize_stent_tool(s: Session, a: dict[str, Any]) -> dict[str, Any]:
     _need_aorta(s)
     cl, ostia = s.centerline, s.ostia
     cur = s.stent
+    lim = limits_for(a["device_id"])
     if cur is None:
         # DECISION: with no device placed, start from where a fresh one would
         # seat (just below the lowest renal), sized there.
         s0 = min(max(preferred_start(ostia, FALLBACK_S0), 0.0), max_start(cl))
-        cur = evaluate_stent(cl, ostia, s0, size_at(cl, s0))
-    st, moved, blocker = optimize_stent(cl, ostia, cur)
+        cur = evaluate_stent(cl, ostia, s0, size_at(cl, s0, lim), lim=lim)
+    st, moved, blocker = optimize_stent(cl, ostia, cur, lim=lim)
     s.device_id = a["device_id"]
     if st is None:
         return {"found": False, "failing_rule": rule_of_reason(blocker)}
@@ -424,8 +432,13 @@ def segment_point(s: Session, _: dict[str, Any]) -> dict[str, Any]:
     return {"error": "unavailable", "reason": "VISTA-3D point segmentation is not wired yet (M2)"}
 
 
-def lookup_device_rules(s: Session, _: dict[str, Any]) -> dict[str, Any]:
-    return {"error": "unavailable", "reason": "device rule lookup is not wired yet (M4); default simplified EVAR rules apply"}
+def lookup_device_rules(s: Session, a: dict[str, Any]) -> dict[str, Any]:
+    # Cached cards only: the live Tavily lookup is the backend's /api/rules.
+    card = device_rules.find(a["device_name"])
+    if card is None:
+        return {"error": "not_found", "reason": f'no rule card for "{a["device_name"]}"; default simplified EVAR rules apply',
+                "rules_source": "default"}
+    return device_rules.card_json(card)
 
 
 def write_plan(s: Session, _: dict[str, Any]) -> dict[str, Any]:

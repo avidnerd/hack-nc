@@ -13,8 +13,10 @@ import { StentMesh } from '../render/stentMesh.ts';
 import { say, set, state } from '../state.ts';
 import type { CaseData, StentState, Vec3 } from '../types.ts';
 import { Centerline } from './centerline.ts';
+import { limitsFor } from './deviceRules.ts';
 import { flowProfile } from './flow1d.ts';
 import {
+  DEFAULT_LIMITS,
   evaluateStent,
   FALLBACK_S0,
   maxStart,
@@ -24,6 +26,7 @@ import {
   preferredStart,
   sizeAt,
   STENT_LENGTH_MM,
+  type Limits,
   type Ostium,
 } from './stent.ts';
 
@@ -40,6 +43,8 @@ export class StentSession {
   private readonly renals: RenalMarkers;
   private grabOffset = 0;
   private anim: { from: number; to: number; start: number } | null = null;
+  /** The chosen device's rules: its IFU card's, else the default simplified rules. */
+  private lim: Limits = DEFAULT_LIMITS;
 
   constructor(
     rig: THREE.Group,
@@ -66,7 +71,23 @@ export class StentSession {
     const st = state.stent;
     if (!st || !this.anim || !this.cl) return st;
     const to = clamp(this.anim.to, 0, maxStart(this.cl, st.lengthMm));
-    return evaluateStent(this.cl, this.ostia, to, st.diameterMm, st.lengthMm);
+    return evaluateStent(this.cl, this.ostia, to, st.diameterMm, st.lengthMm, this.lim);
+  }
+
+  get limits(): Limits {
+    return this.lim;
+  }
+
+  /**
+   * Choose the device the stent is checked and sized against. A placed stent
+   * is re-checked in place against the new rules (same seat, same diameter).
+   */
+  setDevice(deviceId: string | null): void {
+    const next = limitsFor(deviceId);
+    if (next === this.lim || next.source === this.lim.source) return;
+    this.lim = next;
+    const st = state.stent;
+    if (st && this.cl) this.apply(evaluateStent(this.cl, this.ostia, st.s0, st.diameterMm, st.lengthMm, this.lim));
   }
 
   /** Renal ostia as arc lengths on the centerline (for the agent's rule breakdown). */
@@ -79,6 +100,7 @@ export class StentSession {
     this.cl = pts && pts.length > 1 ? new Centerline(pts) : null;
     this.ostia = this.cl && data.centerlines ? ostiaOnCenterline(this.cl, data.centerlines.renalOstia) : [];
     this.kind = data.meta.kind;
+    this.lim = DEFAULT_LIMITS;
     this.mesh.setCenterline(this.cl, f);
     this.particles.setCenterline(this.cl, f);
     this.renals.set(this.kind === 'aorta' ? this.cl : null, this.ostia, f);
@@ -116,7 +138,7 @@ export class StentSession {
       say('No vessel to stent in this case.');
       return;
     }
-    const st = placeStent(this.cl, this.ostia, preferredStart(this.ostia, FALLBACK_S0));
+    const st = placeStent(this.cl, this.ostia, preferredStart(this.ostia, FALLBACK_S0), STENT_LENGTH_MM, this.lim);
     this.apply(st);
     say(
       st.seals
@@ -134,10 +156,10 @@ export class StentSession {
     const len = clamp(lengthMm, 20, this.cl.length);
     let st: StentState;
     if (s0 === undefined) {
-      st = placeStent(this.cl, this.ostia, preferredStart(this.ostia, FALLBACK_S0), len);
+      st = placeStent(this.cl, this.ostia, preferredStart(this.ostia, FALLBACK_S0), len, this.lim);
     } else {
       const at = clamp(s0, 0, maxStart(this.cl, len));
-      st = evaluateStent(this.cl, this.ostia, at, sizeAt(this.cl, at), len);
+      st = evaluateStent(this.cl, this.ostia, at, sizeAt(this.cl, at, this.lim), len, this.lim);
     }
     this.anim = null;
     this.apply(st);
@@ -179,7 +201,7 @@ export class StentSession {
       say(`Already seals. Neck ${Math.round(st.neckMm)} millimeters.`);
       return;
     }
-    const res = optimizeStent(this.cl, this.ostia, st);
+    const res = optimizeStent(this.cl, this.ostia, st, 40, this.lim);
     if (!res.stent) {
       say(`No seal within 40 millimeters. ${res.blocker ?? 'No position passes every rule'}.`);
       return;
@@ -247,6 +269,7 @@ export class StentSession {
       clamp(s0, 0, maxStart(this.cl, st.lengthMm)),
       st.diameterMm,
       st.lengthMm,
+      this.lim,
     );
     if (Math.abs(next.s0 - st.s0) < 0.25) return;
     this.apply(next);

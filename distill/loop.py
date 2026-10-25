@@ -9,6 +9,7 @@ teach.py (teacher traces) and eval.py (every model in the results table).
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -16,6 +17,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
+# Default EVAR rules only, as the training data was verified (device_rules.py).
+os.environ.setdefault("SCRUB_DEVICE_RULES", "0")
 
 from app import agent  # noqa: E402
 from app.engine import Session, execute  # noqa: E402

@@ -13,12 +13,19 @@ cranial end). The rules are the simplified EVAR checks, in this order:
     angulation  < 60 deg between centerline tangents at s0 and s0 + 15 mm
 
 A fresh device is sized 15 % over the native neck at its seat.
+
+A device's rule card (data/device_rules/, from its instructions for use) can
+replace these limits: `Limits` carries the minimum neck length, the oversize
+range (a fresh device is sized at its midpoint), the angulation maximum (IFUs
+write it as "<= 60", so a card's is inclusive) and an optional neck diameter
+range, checked after neck length. Anything the card does not state keeps the
+default. The TS twin is src/devices/stent.ts.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -37,6 +44,27 @@ RULES = {
     "angulation_max_deg": 60.0,
     "neck_deviation": 0.1,
 }
+
+
+@dataclass(frozen=True)
+class Limits:
+    neck_min_mm: float = RULES["neck_min_mm"]
+    oversize_min_pct: float = RULES["oversize_min_pct"]
+    oversize_max_pct: float = RULES["oversize_max_pct"]
+    angulation_max_deg: float = RULES["angulation_max_deg"]
+    angulation_inclusive: bool = False
+    neck_diameter_mm: tuple[float, float] | None = None
+    source: str = "default"
+    # Which fields came from the card (the rest are defaults).
+    from_card: tuple[str, ...] = field(default=())
+
+    @property
+    def oversize(self) -> float:
+        """Fraction a fresh device is sized over the neck: the range midpoint (0.15 by default)."""
+        return (self.oversize_min_pct + self.oversize_max_pct) / 200
+
+
+DEFAULT_LIMITS = Limits()
 
 
 class Centerline:
@@ -132,16 +160,24 @@ def preferred_start(ostia: list[Ostium], fallback: float) -> float:
     return fallback if lowest is None else lowest + RENAL_CLEARANCE_MM
 
 
-def size_at(cl: Centerline, s0: float) -> float:
-    return (1 + OVERSIZE) * cl.mean_diameter(s0, s0 + NECK_WINDOW_MM)
+def size_at(cl: Centerline, s0: float, lim: Limits = DEFAULT_LIMITS) -> float:
+    return (1 + lim.oversize) * cl.mean_diameter(s0, s0 + NECK_WINDOW_MM)
 
 
 def max_start(cl: Centerline, length_mm: float = STENT_LENGTH_MM) -> float:
     return max(0.0, cl.length - length_mm)
 
 
+def angulation_ok(angulation: float, lim: Limits) -> bool:
+    return angulation <= lim.angulation_max_deg if lim.angulation_inclusive else angulation < lim.angulation_max_deg
+
+
+def neck_diameter_ok(neck_mean: float, lim: Limits) -> bool:
+    return lim.neck_diameter_mm is None or lim.neck_diameter_mm[0] <= neck_mean <= lim.neck_diameter_mm[1]
+
+
 def evaluate_stent(cl: Centerline, ostia: list[Ostium], s0: float, diameter_mm: float,
-                   length_mm: float = STENT_LENGTH_MM) -> StentState:
+                   length_mm: float = STENT_LENGTH_MM, lim: Limits = DEFAULT_LIMITS) -> StentState:
     s1 = s0 + length_mm
     neck_mean = cl.mean_diameter(s0, s0 + NECK_WINDOW_MM)
     neck = 0.0
@@ -161,34 +197,48 @@ def evaluate_stent(cl: Centerline, ostia: list[Ostium], s0: float, diameter_mm: 
         fail = "Renal arteries covered" if len(covered) > 1 else f"{covered[0].side.capitalize()} renal artery covered"
     elif lowest is not None and s0 < lowest:
         fail = "Above the renal arteries"
-    elif neck < RULES["neck_min_mm"]:
+    elif neck < lim.neck_min_mm:
         fail = f"Neck too short, {_js_round(neck)} millimeters"
-    elif oversize < RULES["oversize_min_pct"]:
+    elif not neck_diameter_ok(neck_mean, lim):
+        # One decimal: whole millimetres would read "19" for an 18.6 mm neck against a 19 mm minimum.
+        lo, hi = lim.neck_diameter_mm
+        side = f"below the device minimum of {_js_num(lo)}" if neck_mean < lo else f"above the device maximum of {_js_num(hi)}"
+        fail = f"Neck diameter {_js_num(_js_round(neck_mean * 10) / 10)} millimeters, {side}"
+    elif oversize < lim.oversize_min_pct:
         fail = f"Undersized, {_js_round(oversize)} percent oversize"
-    elif oversize > RULES["oversize_max_pct"]:
+    elif oversize > lim.oversize_max_pct:
         fail = f"Oversized, {_js_round(oversize)} percent"
-    elif angulation >= RULES["angulation_max_deg"]:
+    elif not angulation_ok(angulation, lim):
         fail = f"Neck angled {_js_round(angulation)} degrees"
     return StentState(s0, length_mm, diameter_mm, neck, neck_mean, oversize, angulation,
                       None if lowest is None else s0 - lowest, len(covered), fail)
 
 
-def rules(st: StentState) -> list[dict[str, Any]]:
-    """Per-rule pass/fail with the measured value and the limit, in check order."""
+def rules(st: StentState, lim: Limits = DEFAULT_LIMITS) -> list[dict[str, Any]]:
+    """Per-rule pass/fail with the measured value and the limit, in check order.
+
+    neck_diameter appears only when the device's card gives a range.
+    """
     renal_ok = st.renal_covered == 0 and (st.renal_clearance_mm is None or st.renal_clearance_mm >= 0)
-    return [
+    out = [
         {"id": "renal", "pass": renal_ok, "value": st.renal_clearance_mm, "limit": 0.0, "unit": "mm"},
-        {"id": "neck_length", "pass": st.neck_mm >= RULES["neck_min_mm"], "value": st.neck_mm,
-         "limit": RULES["neck_min_mm"], "unit": "mm"},
-        {"id": "oversize", "pass": RULES["oversize_min_pct"] <= st.oversize_pct <= RULES["oversize_max_pct"],
-         "value": st.oversize_pct, "limit": [RULES["oversize_min_pct"], RULES["oversize_max_pct"]], "unit": "%"},
-        {"id": "angulation", "pass": st.angulation_deg < RULES["angulation_max_deg"], "value": st.angulation_deg,
-         "limit": RULES["angulation_max_deg"], "unit": "deg"},
+        {"id": "neck_length", "pass": st.neck_mm >= lim.neck_min_mm, "value": st.neck_mm,
+         "limit": lim.neck_min_mm, "unit": "mm"},
     ]
+    if lim.neck_diameter_mm is not None:
+        out.append({"id": "neck_diameter", "pass": neck_diameter_ok(st.neck_mean_mm, lim), "value": st.neck_mean_mm,
+                    "limit": list(lim.neck_diameter_mm), "unit": "mm"})
+    out += [
+        {"id": "oversize", "pass": lim.oversize_min_pct <= st.oversize_pct <= lim.oversize_max_pct,
+         "value": st.oversize_pct, "limit": [lim.oversize_min_pct, lim.oversize_max_pct], "unit": "%"},
+        {"id": "angulation", "pass": angulation_ok(st.angulation_deg, lim), "value": st.angulation_deg,
+         "limit": lim.angulation_max_deg, "unit": "deg"},
+    ]
+    return out
 
 
 def place_stent(cl: Centerline, ostia: list[Ostium], prefer_s0: float | None = None,
-                length_mm: float = STENT_LENGTH_MM) -> StentState:
+                length_mm: float = STENT_LENGTH_MM, lim: Limits = DEFAULT_LIMITS) -> StentState:
     """Scan every 1 mm start, size each, and take the sealing seat nearest `prefer_s0`."""
     if prefer_s0 is None:
         prefer_s0 = preferred_start(ostia, 0.0)
@@ -196,14 +246,14 @@ def place_stent(cl: Centerline, ostia: list[Ostium], prefer_s0: float | None = N
     best = None
     s0 = 0.0
     while s0 <= hi:
-        st = evaluate_stent(cl, ostia, s0, size_at(cl, s0), length_mm)
+        st = evaluate_stent(cl, ostia, s0, size_at(cl, s0, lim), length_mm, lim)
         if st.seals and (best is None or abs(s0 - prefer_s0) < abs(best.s0 - prefer_s0)):
             best = st
         s0 += 1
     if best is not None:
         return best
     s0 = min(max(prefer_s0, 0.0), hi)
-    return evaluate_stent(cl, ostia, s0, size_at(cl, s0), length_mm)
+    return evaluate_stent(cl, ostia, s0, size_at(cl, s0, lim), length_mm, lim)
 
 
 def rule_of_reason(reason: str | None) -> str | None:
@@ -212,6 +262,8 @@ def rule_of_reason(reason: str | None) -> str | None:
         return None
     if reason.startswith("Neck too short"):
         return "neck_length"
+    if reason.startswith("Neck diameter"):
+        return "neck_diameter"
     if reason.startswith("Neck angled"):
         return "angulation"
     if reason.startswith(("Undersized", "Oversized")):
@@ -222,7 +274,7 @@ def rule_of_reason(reason: str | None) -> str | None:
 
 
 def optimize_stent(cl: Centerline, ostia: list[Ostium], current: StentState,
-                   range_mm: int = 40) -> tuple[StentState | None, float, str | None]:
+                   range_mm: int = 40, lim: Limits = DEFAULT_LIMITS) -> tuple[StentState | None, float, str | None]:
     """Slide the chosen device +-40 mm in 1 mm steps (nearest first) to the nearest sealing seat.
 
     Returns (stent, moved mm, blocker): the blocker is the failure reason seen
@@ -235,7 +287,7 @@ def optimize_stent(cl: Centerline, ostia: list[Ostium], current: StentState,
             s0 = current.s0 + sign * step
             if s0 < 0 or s0 > hi:
                 continue
-            st = evaluate_stent(cl, ostia, s0, current.diameter_mm, current.length_mm)
+            st = evaluate_stent(cl, ostia, s0, current.diameter_mm, current.length_mm, lim)
             if st.seals:
                 return st, s0 - current.s0, None
             key = (st.fail_reason or "").split(",")[0]
@@ -251,3 +303,8 @@ def optimize_stent(cl: Centerline, ostia: list[Ostium], current: StentState,
 def _js_round(x: float) -> int:
     """Math.round: halves go up."""
     return int(math.floor(x + 0.5))
+
+
+def _js_num(x: float) -> str:
+    """A number as JS String() writes it for these values: 19 not 19.0, 18.6 as 18.6."""
+    return str(int(x)) if float(x).is_integer() else repr(float(x))

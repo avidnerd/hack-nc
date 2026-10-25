@@ -170,6 +170,8 @@ export interface StentState {
   diameterMm: number;
   /** Proximal neck length in mm; must be >= 10 to seal. */
   neckMm: number;
+  /** Mean lumen diameter over the first 15 mm below s0 (the native neck). */
+  neckMeanMm: number;
   /** Percent oversize vs. native lumen; must be 10..20. */
   oversizePct: number;
   /** Neck angulation in degrees; must be < 60. */

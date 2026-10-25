@@ -188,24 +188,33 @@ test('tools drive the live app and answer in the shared shapes', async ({ page }
   // The aorta case: the stent tools.
   await page.evaluate(() => window.scrub!.dispatch({ kind: 'loadCase', id: 'aorta' }, 'key'));
   await page.waitForFunction(() => window.scrub!.state.data?.meta.id === 'aorta');
-  const st = await tool('place_stent', { device_id: 'gore_excluder' });
-  expect(st).toMatchObject({ device_id: 'gore_excluder', seals: true });
+  const st = await tool('place_stent', { device_id: 'generic' });
+  expect(st).toMatchObject({ device_id: 'generic', seals: true });
   expect((st.rules as { pass: boolean }[]).every((r) => r.pass)).toBe(true);
   expect(await page.evaluate(() => window.scrub!.state.stent?.seals)).toBe(true);
   const neck = (st.rules as { id: string; value: number }[]).find((r) => r.id === 'neck_length')!.value;
   expect(await tool('measure', { what: 'neck_length' })).toMatchObject({ value: neck, unit: 'mm' });
-  const lowest = await tool('place_stent', { device_id: 'gore_excluder', s0_mm: Math.max(0, (st.s0_mm as number) - 15) });
+  const lowest = await tool('place_stent', { device_id: 'generic', s0_mm: Math.max(0, (st.s0_mm as number) - 15) });
   expect(lowest).toMatchObject({ seals: false });
   expect((lowest.rules as { id: string; pass: boolean }[])[0]).toMatchObject({ id: 'renal', pass: false });
   // A device sized for that seat may seal nowhere; report, not crash.
-  const nowhere = await tool('optimize_stent', { device_id: 'gore_excluder' });
+  const nowhere = await tool('optimize_stent', { device_id: 'generic' });
   expect(nowhere.found === true || typeof nowhere.failing_rule === 'string').toBe(true);
   // The keyboard story: the sealing device nudged 15 mm up, then optimized.
-  await tool('place_stent', { device_id: 'gore_excluder' });
+  await tool('place_stent', { device_id: 'generic' });
   await page.evaluate(() => window.scrub!.dispatch({ kind: 'nudgeStent', mm: -15 }, 'key'));
   await page.waitForFunction(() => window.scrub!.state.stent?.seals === false);
-  const fixed = await tool('optimize_stent', { device_id: 'gore_excluder' });
+  const fixed = await tool('optimize_stent', { device_id: 'generic' });
   expect(fixed).toMatchObject({ found: true, seals: true });
   await page.waitForFunction(() => window.scrub!.state.stent?.seals === true, null, { timeout: 10_000 });
+  // A device with a committed IFU rule card: the card is shown with its
+  // sources, and the case's 18.6 mm neck is under the Excluder's 19 mm minimum.
+  const card = await tool('lookup_device_rules', { device_name: 'Gore Excluder' });
+  expect(card).toMatchObject({ device_id: 'gore-excluder', rules: { neck_diameter_mm: [19, 32] }, not_found: ['oversize_pct'] });
+  await expect(page.locator('.info-card.show .info-link').first()).toHaveAttribute('href', /^https:\/\/www\.goremedical\.com\//);
+  const gore = await tool('place_stent', { device_id: 'Gore Excluder' });
+  expect(gore).toMatchObject({ rules_source: 'ifu:gore-excluder', seals: false });
+  expect((gore.rules as { id: string; pass: boolean }[]).find((r) => r.id === 'neck_diameter')).toMatchObject({ pass: false, value: 18.6 });
+  expect(await page.evaluate(() => window.scrub!.state.stent?.failReason)).toBe('Neck diameter 18.6 millimeters, below the device minimum of 19');
   expect(await tool('optimize_plane')).toHaveProperty('error');
 });

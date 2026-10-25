@@ -1,0 +1,56 @@
+{
+  "id": "gore-excluder-conformable",
+  "device": "Gore Excluder Conformable",
+  "aliases": [
+    "Gore Excluder Conformable"
+  ],
+  "fetched": "2026-10-25",
+  "query": "Gore Excluder Conformable instructions for use indications aortic neck length diameter angulation oversizing",
+  "search_results": [
+    "https://www.goremedical.com/products/excluder-conformable/specifications",
+    "https://www.goremedical.com/products/excluder-conformable",
+    "https://www.goremedical.com/education/physician-education",
+    "https://www.goremedical.com/value-summary/aortic",
+    "https://www.goremedical.com/aortic-ally",
+    "https://www.goremedical.com/conditions-procedures/aortoiliac-aneurysm",
+    "https://www.goremedical.com/en-emea/products/excluder-conformable/specifications",
+    "https://www.goremedical.com/products/excluder",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030C.pdf",
+    "https://www.accessdata.fda.gov/SCRIPTS/cdrh/devicesatfda/index.cfm?db=pma&id=464737",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030A.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf23/P230023B.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030S014C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf23/P230023C.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf4/P040043S040c.pdf",
+    "https://www.accessdata.fda.gov/cdrh_docs/pdf20/P200030B.pdf"
+  ],
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "fields": {
+    "neck_length_min_mm": {
+      "value": 10,
+      "quote": "Infrarenal aortic neck treatment diameter range of 16-32 mm and a minimum aortic neck length of 10 mm; Proximal aortic neck angulation ≤ 90°",
+      "url": "https://www.goremedical.com/products/excluder-conformable/specifications"
+    },
+    "neck_diameter_mm": {
+      "value": [
+        16,
+        32
+      ],
+      "quote": "Infrarenal aortic neck treatment diameter range of 16-32 mm and a minimum aortic neck length of 10 mm; Proximal aortic neck angulation ≤ 90°",
+      "url": "https://www.goremedical.com/products/excluder-conformable/specifications"
+    },
+    "neck_angulation_max_deg": {
+      "value": 90,
+      "quote": "Infrarenal aortic neck treatment diameter range of 16-32 mm and a minimum aortic neck length of 10 mm; Proximal aortic neck angulation ≤ 90°",
+      "url": "https://www.goremedical.com/products/excluder-conformable/specifications"
+    }
+  },
+  "dropped": [],
+  "timing_s": {
+    "total": 34.65
+  },
+  "usage": {
+    "prompt_tokens": 17314,
+    "completion_tokens": 3146
+  }
+}

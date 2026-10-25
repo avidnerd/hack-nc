@@ -17,6 +17,13 @@
  *
  * DECISION: the neck is measured distally from the stent's proximal end, i.e.
  * the length of healthy, uniform aorta the seal zone actually sits on.
+ *
+ * A device's rule card (src/devices/deviceRules.ts, from its instructions for
+ * use) can replace these limits through `Limits`: minimum neck length, the
+ * oversize range (a fresh device is sized at its midpoint), the angulation
+ * maximum (inclusive on a card: IFUs write "<= 60") and an optional neck
+ * diameter range, checked after neck length. The Python twin is
+ * backend/app/engine/stent.py.
  */
 
 import { angleDeg } from '../coords.ts';
@@ -47,14 +54,48 @@ export const RULES = {
   neckDeviation: 0.1,
 };
 
+export interface Limits {
+  neckMinMm: number;
+  oversizeMinPct: number;
+  oversizeMaxPct: number;
+  angulationMaxDeg: number;
+  angulationInclusive: boolean;
+  neckDiameterMm: [number, number] | null;
+  /** "default", or "ifu:<card id>". */
+  source: string;
+}
+
+export const DEFAULT_LIMITS: Limits = {
+  neckMinMm: RULES.neckMinMm,
+  oversizeMinPct: RULES.oversizeMinPct,
+  oversizeMaxPct: RULES.oversizeMaxPct,
+  angulationMaxDeg: RULES.angulationMaxDeg,
+  angulationInclusive: false,
+  neckDiameterMm: null,
+  source: 'default',
+};
+
+/** Fraction a fresh device is sized over the neck: the oversize range midpoint (0.15 by default). */
+export function oversizeOf(lim: Limits): number {
+  return (lim.oversizeMinPct + lim.oversizeMaxPct) / 200;
+}
+
+export function angulationOk(deg: number, lim: Limits): boolean {
+  return lim.angulationInclusive ? deg <= lim.angulationMaxDeg : deg < lim.angulationMaxDeg;
+}
+
+export function neckDiameterOk(neckMeanMm: number, lim: Limits): boolean {
+  return lim.neckDiameterMm === null || (neckMeanMm >= lim.neckDiameterMm[0] && neckMeanMm <= lim.neckDiameterMm[1]);
+}
+
 export interface Ostium {
   s: number;
   side: 'left' | 'right';
 }
 
-/** Device diameter for a stent seated at s0: 15 % over the native neck. */
-export function sizeAt(cl: Centerline, s0: number): number {
-  return (1 + OVERSIZE) * cl.meanDiameter(s0, s0 + NECK_WINDOW_MM);
+/** Device diameter for a stent seated at s0: 15 % over the native neck (a card's oversize midpoint). */
+export function sizeAt(cl: Centerline, s0: number, lim: Limits = DEFAULT_LIMITS): number {
+  return (1 + oversizeOf(lim)) * cl.meanDiameter(s0, s0 + NECK_WINDOW_MM);
 }
 
 /** Largest start position that keeps the whole stent on the centerline. */
@@ -72,6 +113,7 @@ export function evaluateStent(
   s0: number,
   diameterMm: number,
   lengthMm = STENT_LENGTH_MM,
+  lim: Limits = DEFAULT_LIMITS,
 ): StentState {
   const s1 = s0 + lengthMm;
   const neckMean = cl.meanDiameter(s0, s0 + NECK_WINDOW_MM);
@@ -94,13 +136,18 @@ export function evaluateStent(
     failReason = covered.length > 1 ? 'Renal arteries covered' : `${cap(covered[0].side)} renal artery covered`;
   } else if (lowest !== null && s0 < lowest) {
     failReason = 'Above the renal arteries';
-  } else if (neckMm < RULES.neckMinMm) {
+  } else if (neckMm < lim.neckMinMm) {
     failReason = `Neck too short, ${Math.round(neckMm)} millimeters`;
-  } else if (oversizePct < RULES.oversizeMinPct) {
+  } else if (!neckDiameterOk(neckMean, lim)) {
+    // One decimal: whole millimetres would read "19" for an 18.6 mm neck against a 19 mm minimum.
+    const [lo, hi] = lim.neckDiameterMm!;
+    const side = neckMean < lo ? `below the device minimum of ${lo}` : `above the device maximum of ${hi}`;
+    failReason = `Neck diameter ${Math.round(neckMean * 10) / 10} millimeters, ${side}`;
+  } else if (oversizePct < lim.oversizeMinPct) {
     failReason = `Undersized, ${Math.round(oversizePct)} percent oversize`;
-  } else if (oversizePct > RULES.oversizeMaxPct) {
+  } else if (oversizePct > lim.oversizeMaxPct) {
     failReason = `Oversized, ${Math.round(oversizePct)} percent`;
-  } else if (angulationDeg >= RULES.angulationMaxDeg) {
+  } else if (!angulationOk(angulationDeg, lim)) {
     failReason = `Neck angled ${Math.round(angulationDeg)} degrees`;
   }
 
@@ -109,6 +156,7 @@ export function evaluateStent(
     lengthMm,
     diameterMm,
     neckMm,
+    neckMeanMm: neckMean,
     oversizePct,
     angulationDeg,
     seals: failReason === null,
@@ -138,17 +186,18 @@ export function placeStent(
   ostia: Ostium[],
   preferS0: number = preferredStart(ostia, 0),
   lengthMm = STENT_LENGTH_MM,
+  lim: Limits = DEFAULT_LIMITS,
 ): StentState {
   const hi = maxStart(cl, lengthMm);
   let best: StentState | null = null;
   for (let s0 = 0; s0 <= hi; s0 += 1) {
-    const st = evaluateStent(cl, ostia, s0, sizeAt(cl, s0), lengthMm);
+    const st = evaluateStent(cl, ostia, s0, sizeAt(cl, s0, lim), lengthMm, lim);
     if (!st.seals) continue;
     if (!best || Math.abs(s0 - preferS0) < Math.abs(best.s0 - preferS0)) best = st;
   }
   if (best) return best;
   const s0 = Math.min(Math.max(preferS0, 0), hi);
-  return evaluateStent(cl, ostia, s0, sizeAt(cl, s0), lengthMm);
+  return evaluateStent(cl, ostia, s0, sizeAt(cl, s0, lim), lengthMm, lim);
 }
 
 /**
@@ -161,6 +210,7 @@ export function optimizeStent(
   ostia: Ostium[],
   current: StentState,
   rangeMm = 40,
+  lim: Limits = DEFAULT_LIMITS,
 ): { stent: StentState | null; movedMm: number; blocker: string | null } {
   const hi = maxStart(cl, current.lengthMm);
   const tally = new Map<string, number>();
@@ -168,7 +218,7 @@ export function optimizeStent(
     for (const sign of step === 0 ? [1] : [-1, 1]) {
       const s0 = current.s0 + sign * step;
       if (s0 < 0 || s0 > hi) continue;
-      const st = evaluateStent(cl, ostia, s0, current.diameterMm, current.lengthMm);
+      const st = evaluateStent(cl, ostia, s0, current.diameterMm, current.lengthMm, lim);
       if (st.seals) return { stent: st, movedMm: s0 - current.s0, blocker: null };
       const key = (st.failReason ?? '').replace(/,.*$/, '');
       tally.set(key, (tally.get(key) ?? 0) + 1);

@@ -17,17 +17,22 @@
 
 import { cross, dot, normalize } from '../coords.ts';
 import type { Centerline } from '../devices/centerline.ts';
+import { addCard, cardJson, findCard, limitsFor, type RuleCard } from '../devices/deviceRules.ts';
 import {
+  angulationOk,
+  DEFAULT_LIMITS,
   evaluateStent,
   FALLBACK_S0,
   lowestRenal,
   maxStart,
   NECK_WINDOW_MM,
+  neckDiameterOk,
   optimizeStent,
   placeStent,
   preferredStart,
-  RULES,
   sizeAt,
+  STENT_LENGTH_MM,
+  type Limits,
   type Ostium,
 } from '../devices/stent.ts';
 import { evaluatePlane, type EngineContext } from '../planning/engine.ts';
@@ -38,6 +43,7 @@ import { state } from '../state.ts';
 import type { CaseData, PlanMetrics, Plane, PresetName, StentState, Thresholds, Vec3 } from '../types.ts';
 import type { CardContent } from '../ui/infoCard.ts';
 import type { Intent } from '../voice/intents.ts';
+import { fetchDeviceRules } from './agentClient.ts';
 
 export type Json = Record<string, unknown>;
 
@@ -81,6 +87,10 @@ export interface ToolHost {
   dispatch(intent: Intent): void;
   stentCenterline(): Centerline | null;
   stentOstia(): Ostium[];
+  /** Check and size the stent against this device's rule card (default rules without one). */
+  setStentDevice(deviceId: string | null): void;
+  /** Show a device's rule card with its sources. */
+  showRuleCard(card: RuleCard): void;
   /** Place the device: v1 placement when s0 is omitted, exactly at s0 otherwise. */
   placeStent(s0?: number, lengthMm?: number): StentState | null;
   /** The device where it is headed (the end of a running slide), else the one drawn. */
@@ -153,11 +163,8 @@ export function movePlaneBy(
   return { n, d: d + offsetMm };
 }
 
-/** Which rules a device is checked against; M4's rule cards add sourced ones. */
-export const RULES_SOURCE = 'default';
-
 export interface StentRule {
-  id: 'renal' | 'neck_length' | 'oversize' | 'angulation';
+  id: 'renal' | 'neck_length' | 'neck_diameter' | 'oversize' | 'angulation';
   pass: boolean;
   value: number | null;
   limit: number | number[];
@@ -167,37 +174,45 @@ export interface StentRule {
 /**
  * The per-rule breakdown of a stent verdict, in the order evaluateStent
  * checks them. Values are the ones evaluateStent computed; this only reports
- * them against the same RULES limits.
+ * them against the same limits. neck_diameter appears only when the device's
+ * card gives a range.
  */
-export function stentRules(st: StentState, ostia: Ostium[]): StentRule[] {
+export function stentRules(st: StentState, ostia: Ostium[], lim: Limits = DEFAULT_LIMITS): StentRule[] {
   const s1 = st.s0 + st.lengthMm;
   const covered = ostia.some((o) => o.s >= st.s0 && o.s <= s1);
   const lowest = lowestRenal(ostia);
   // Clearance below the lowest renal ostium (negative: above it); null without ostia.
   const clearance = lowest === null ? null : st.s0 - lowest;
-  return [
+  const out: StentRule[] = [
     { id: 'renal', pass: !covered && (clearance === null || clearance >= 0), value: clearance === null ? null : r1(clearance), limit: 0, unit: 'mm' },
-    { id: 'neck_length', pass: st.neckMm >= RULES.neckMinMm, value: r1(st.neckMm), limit: RULES.neckMinMm, unit: 'mm' },
+    { id: 'neck_length', pass: st.neckMm >= lim.neckMinMm, value: r1(st.neckMm), limit: lim.neckMinMm, unit: 'mm' },
+  ];
+  if (lim.neckDiameterMm) {
+    out.push({ id: 'neck_diameter', pass: neckDiameterOk(st.neckMeanMm, lim), value: r1(st.neckMeanMm), limit: [...lim.neckDiameterMm], unit: 'mm' });
+  }
+  out.push(
     {
       id: 'oversize',
-      pass: st.oversizePct >= RULES.oversizeMinPct && st.oversizePct <= RULES.oversizeMaxPct,
+      pass: st.oversizePct >= lim.oversizeMinPct && st.oversizePct <= lim.oversizeMaxPct,
       value: r1(st.oversizePct),
-      limit: [RULES.oversizeMinPct, RULES.oversizeMaxPct],
+      limit: [lim.oversizeMinPct, lim.oversizeMaxPct],
       unit: '%',
     },
-    { id: 'angulation', pass: st.angulationDeg < RULES.angulationMaxDeg, value: r1(st.angulationDeg), limit: RULES.angulationMaxDeg, unit: 'deg' },
-  ];
+    { id: 'angulation', pass: angulationOk(st.angulationDeg, lim), value: r1(st.angulationDeg), limit: lim.angulationMaxDeg, unit: 'deg' },
+  );
+  return out;
 }
 
 export function stentOut(st: StentState, deviceId: string | null, ostia: Ostium[]): Json {
+  const lim = limitsFor(deviceId);
   return {
     device_id: deviceId,
     s0_mm: r1(st.s0),
     length_mm: r1(st.lengthMm),
     diameter_mm: r1(st.diameterMm),
     oversize_pct: r1(st.oversizePct),
-    rules: stentRules(st, ostia),
-    rules_source: RULES_SOURCE,
+    rules: stentRules(st, ostia, lim),
+    rules_source: lim.source,
     seals: st.seals,
   };
 }
@@ -206,6 +221,7 @@ export function stentOut(st: StentState, deviceId: string | null, ostia: Ostium[
 export function ruleOfReason(reason: string | null): StentRule['id'] | null {
   if (!reason) return null;
   if (reason.startsWith('Neck too short')) return 'neck_length';
+  if (reason.startsWith('Neck diameter')) return 'neck_diameter';
   if (reason.startsWith('Neck angled')) return 'angulation';
   if (reason.startsWith('Undersized') || reason.startsWith('Oversized')) return 'oversize';
   if (/renal/i.test(reason)) return 'renal';
@@ -298,6 +314,11 @@ interface AgentSession {
 }
 let session: AgentSession = { caseId: '', deviceId: null, resectedAt: null };
 
+/** The device chosen outside a tool call (voice "size for a Gore Excluder"), so get_state reports its rules. */
+export function noteDevice(deviceId: string | null): void {
+  sess().deviceId = deviceId;
+}
+
 function sess(): AgentSession {
   if (session.caseId !== state.caseId) session = { caseId: state.caseId, deviceId: null, resectedAt: null };
   return session;
@@ -377,7 +398,10 @@ const METHOD = {
 /** The stent the neck measures read: the placed one, else where a fresh one would seat. */
 function neckStent(): StentState {
   const h = host!;
-  return h.stent() ?? placeStent(h.stentCenterline()!, h.stentOstia(), preferredStart(h.stentOstia(), FALLBACK_S0));
+  return (
+    h.stent() ??
+    placeStent(h.stentCenterline()!, h.stentOstia(), preferredStart(h.stentOstia(), FALLBACK_S0), STENT_LENGTH_MM, limitsFor(sess().deviceId))
+  );
 }
 
 /** Min |n.x - d| over a structure's planning-grid voxels, 0 when the plane cuts through it. */
@@ -555,6 +579,26 @@ async function optimizePlaneTool(args: Json): Promise<Json> {
   };
 }
 
+/**
+ * A committed card (bundled) answers at once; otherwise the backend's live
+ * lookup is tried, and its card kept for the session. The card is shown with
+ * its sources either way. Python's executor reads committed cards only.
+ */
+async function lookupDeviceRules(args: Json): Promise<Json> {
+  const name = String(args.device_name ?? '');
+  let card = findCard(name);
+  if (!card) {
+    const live = await fetchDeviceRules<RuleCard>(name);
+    if (live && live.id && live.fields && Object.keys(live.fields).length) {
+      addCard(live);
+      card = live;
+    }
+  }
+  if (!card) return { error: 'not_found', reason: `no rule card for "${name}"; default simplified EVAR rules apply`, rules_source: 'default' };
+  host?.showRuleCard(card);
+  return cardJson(card) as Json;
+}
+
 function stentReady(): string | null {
   const h = host!;
   const data = state.data;
@@ -568,10 +612,13 @@ function placeStentTool(args: Json): Json {
   const h = host!;
   const bad = stentReady();
   if (bad) return { error: bad };
+  // DECISION: a device with a rule card is checked and sized against it; any
+  // other device gets the default simplified EVAR rules.
+  sess().deviceId = typeof args.device_id === 'string' ? args.device_id : null;
+  h.setStentDevice(sess().deviceId);
   // s0 and length are clamped to the centerline (placeAt), as in the Python twin.
   const st = h.placeStent(num(args.s0_mm) ?? undefined, num(args.length_mm) ?? undefined);
   if (!st) return { error: 'could not place the stent' };
-  sess().deviceId = typeof args.device_id === 'string' ? args.device_id : null;
   return stentJson(st);
 }
 
@@ -584,14 +631,16 @@ function optimizeStentTool(args: Json): Json {
   const placed = h.stent();
   // DECISION: with no device placed, start from where a fresh one would seat
   // (just below the lowest renal), sized there.
+  sess().deviceId = typeof args.device_id === 'string' ? args.device_id : null;
+  const lim = limitsFor(sess().deviceId);
   let cur = placed;
   if (!cur) {
     const s0 = Math.min(Math.max(preferredStart(ostia, FALLBACK_S0), 0), maxStart(cl));
-    cur = evaluateStent(cl, ostia, s0, sizeAt(cl, s0));
+    cur = evaluateStent(cl, ostia, s0, sizeAt(cl, s0, lim), STENT_LENGTH_MM, lim);
   }
   // The same search the spoken "optimize" runs, read before it animates.
-  const res = optimizeStent(cl, ostia, cur);
-  sess().deviceId = typeof args.device_id === 'string' ? args.device_id : null;
+  const res = optimizeStent(cl, ostia, cur, 40, lim);
+  h.setStentDevice(sess().deviceId);
   if (placed) h.optimizeStent();
   if (!res.stent) return { found: false, failing_rule: ruleOfReason(res.blocker) };
   if (!placed) h.setStent(res.stent);
@@ -724,7 +773,7 @@ export async function executeTool(name: string, args: Json | null | undefined): 
       case 'segment_point':
         return { error: 'unavailable', reason: 'VISTA-3D point segmentation is not wired yet (M2)' };
       case 'lookup_device_rules':
-        return { error: 'unavailable', reason: 'device rule lookup is not wired yet (M4); default simplified EVAR rules apply' };
+        return await lookupDeviceRules(a);
       default:
         return { error: `unknown tool "${name}"` };
     }

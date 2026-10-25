@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from . import agent, config, ground
+from . import agent, config, ground, rules
+from .engine import device_rules
 from .tools import tool_specs
 
 settings = config.load()
@@ -74,3 +75,18 @@ def run_agent(req: AgentRequest) -> dict:
 @app.get("/api/grounding")
 def grounding() -> dict:
     return ground.totals(settings.metrics_dir)
+
+
+@app.get("/api/rules")
+def device_rules_card(device: str) -> dict:
+    """A device's rule card: the committed one, else a live Tavily + Super lookup (cached to data/device_rules/)."""
+    device = device.strip()[:120]
+    if not device:
+        raise HTTPException(400, "device is required")
+    card = device_rules.find(device)
+    if card is not None:
+        return card
+    try:
+        return rules.lookup(device, settings)
+    except Exception as e:  # Tavily or Token Factory down: the client keeps the default rules
+        raise HTTPException(502, f"rule lookup failed: {type(e).__name__}") from e

@@ -959,6 +959,25 @@ body.card-open .rail-step.done {
   color: var(--ink-faint);
   margin-top: 8px;
 }
+/* Rule card sources: the only clickable part of a card. */
+.info-card.show .info-link {
+  pointer-events: auto;
+}
+.info-link {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.info-link:hover,
+.info-link:focus-visible {
+  text-decoration: underline;
+}
 
 /* ------------------------------------------------------- gesture tutorial */
 
