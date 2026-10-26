@@ -35,8 +35,12 @@ def open_session(cmd: dict[str, Any]) -> Session:
     return s
 
 
-def solve(client: Any, model: str, cmd: dict[str, Any], timeout_s: float = 30.0) -> dict[str, Any]:
-    """Returns the full trace: messages, tool calls with results, final text, timing, tokens."""
+def solve(client: Any, model: str, cmd: dict[str, Any], timeout_s: float = 30.0, turn: Any = None) -> dict[str, Any]:
+    """Returns the full trace: messages, tool calls with results, final text, timing, tokens.
+
+    `turn(text, state, history) -> AgentResult` replaces the single-model round
+    (the router eval passes agent.route_turn).
+    """
     s = open_session(cmd)
     state0 = execute(s, "get_state")
     history: list[dict[str, Any]] = []
@@ -48,11 +52,15 @@ def solve(client: Any, model: str, cmd: dict[str, Any], timeout_s: float = 30.0)
     error = None
     for _ in range(MAX_ROUNDS):
         try:
-            r = agent.run_turn(client, model, cmd["text"], state0, timeout_s, history=history)
+            if turn is not None:
+                r = turn(cmd["text"], state0, history)
+            else:
+                r = agent.run_turn(client, model, cmd["text"], state0, timeout_s, history=history)
         except Exception as e:  # provider error or timeout: the trace fails, the run goes on
             error = f"{type(e).__name__}: {e}"[:300]
             break
-        rounds.append({"latency_ms": r.latency_ms, "prompt_tokens": r.prompt_tokens, "completion_tokens": r.completion_tokens})
+        rounds.append({"latency_ms": r.latency_ms, "prompt_tokens": r.prompt_tokens, "completion_tokens": r.completion_tokens,
+                       "model": r.model, "escalated": r.escalated, "escalation_reason": r.escalation_reason})
         if r.done:
             final = r
             break

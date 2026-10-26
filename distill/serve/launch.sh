@@ -34,7 +34,8 @@ nebius ai endpoint create --name "scrub-nano-$NAME" \
   --volume "$NEBIUS_S3_BUCKET_ID:/data:ro" \
   --platform "$PLATFORM" --preset "$PRESET" --disk-size 100Gi --shm-size 16Gi \
   --auth token --token "$NANO_API_KEY" --async --format json > "$OUT"
-ID=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["metadata"]["id"])' "$OUT")
+# The create output is the endpoint (metadata.id) or its operation (resource_id).
+ID=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d.get("metadata",{}).get("id") or d.get("resource_id") or d["metadata"]["resource_id"])' "$OUT")
 echo "endpoint $ID"
 URL=""
 for _ in $(seq 1 60); do

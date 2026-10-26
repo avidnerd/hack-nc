@@ -5,7 +5,10 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
 - [ ] At least one **NVIDIA open model** used **at runtime** (Nemotron 3 Super, Nemotron Nano 9B v2 + our LoRA, VISTA-3D / NV-Segment-CT, optionally Parakeet)
   - [x] Nemotron 3 Super called at runtime from the backend (M0; verified 2026-10-22 through the app palette, local backend)
   - [ ] Nano 9B v2 + LoRA served at runtime (M3)
+    - [x] Trained (run `lora-1025-1456`, H100 Serverless Job), merged, served by vLLM on the `scrub-nano-scrub` Serverless Endpoint, evaluated on 256 held-out commands (2026-10-25)
+    - [ ] Reached by the hosted app through the router (needs the hosted backend, M5)
   - [ ] VISTA-3D runs at runtime (M2)
+    - [x] Full-scan Serverless Job (H100) segments the 8 gallery scans; Dice in docs/RESULTS.md (2026-10-22)
 - [ ] Runtime use of **Nebius Token Factory** inference API
 - [ ] Runtime use of **Nebius AI Cloud** (Serverless Endpoints + Serverless Jobs)
 - [ ] Hosted **demo URL** works for a judge **without a webcam and without a microphone**
@@ -24,6 +27,6 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
   - [ ] TotalSegmentator (Apache 2.0 code / CC BY 4.0 data)
   - [ ] VISTA-3D (code Apache 2.0, weights NVIDIA Open Model License, research use only)
   - [ ] Nemotron (NVIDIA Open Model License)
-  - [ ] Tavily ToS
+  - [ ] Tavily ToS (Tavily is used at runtime by `/api/rules`; cards cached in `data/device_rules/`)
 - [ ] No closed-model calls left in the hosted build (Gemini proxy `api/llm.ts` removed or disabled)
 - [ ] No secrets in the repo or client bundle (pre-commit check passes; `grep` of `web-dist/`)

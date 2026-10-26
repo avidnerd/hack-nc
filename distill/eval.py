@@ -4,6 +4,7 @@
     cd backend && uv run python ../distill/eval.py run --model nano-tf    # Token Factory, Nemotron 3 Nano 30B
     cd backend && uv run python ../distill/eval.py run --model nano       # our endpoint, base weights
     cd backend && uv run python ../distill/eval.py run --model nano-lora  # our endpoint, + LoRA
+    cd backend && uv run python ../distill/eval.py run --model router     # Nano-LoRA first, Super on escalation
     cd backend && uv run python ../distill/eval.py report                 # -> metrics/results.json
 
 Each run writes distill/data/eval_<name>.jsonl (one verified trace per test
@@ -45,7 +46,7 @@ METRICS = ROOT / "metrics"
 # (metrics/tf_models.json, docs/PLATFORM_NOTES.md).
 # Our endpoint (docs/PLATFORM_NOTES.md, Nebius on-demand H100 from 2026-10-08).
 H100_USD_PER_HOUR = 4.50
-ENDPOINT_MODELS = ("nano", "nano-lora")
+ENDPOINT_MODELS = ("nano", "nano-lora", "router")
 
 PRICES: dict[str, tuple[float, float]] = {
     "nvidia/nemotron-3-super-120b-a12b": (0.30, 0.90),
@@ -69,13 +70,24 @@ def score(rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
     model = rows[0]["model"] if rows else name
     cost = None
     method = "-"
-    if model in PRICES:
+    if name == "router":
+        # Nano-LoRA's endpoint for the run's wall time, plus Super's tokens on escalated rounds.
+        sup = [x for r in rows for x in r.get("rounds", []) if x.get("model") in PRICES]
+        pin, pout = PRICES[next(iter(PRICES))]
+        usd = sum((x.get("prompt_tokens") or 0) * pin + (x.get("completion_tokens") or 0) * pout for x in sup) / 1e6
+        gpu = [json.loads(ln) for ln in (METRICS / "spend.jsonl").read_text().splitlines() if ln.strip()]
+        run_ = [g for g in gpu if g.get("eval") == name and not g.get("superseded")]
+        usd += sum(g["gpu_seconds"] * g["usd_per_gpu_hour"] / 3600 for g in run_)
+        cost = round(usd / n * 1000, 4) if run_ else None
+        method = f"H100 GPU-seconds during the run x ${H100_USD_PER_HOUR}/h, plus Super tokens x price on escalated rounds"
+    elif model in PRICES:
         pin, pout = PRICES[model]
         cost = round((tin * pin + tout * pout) / 1e6 / n * 1000, 4)
         method = f"tokens x price ({pin}/{pout} USD per 1M in/out)"
     elif (METRICS / "spend.jsonl").exists():
         gpu = [json.loads(ln) for ln in (METRICS / "spend.jsonl").read_text().splitlines() if ln.strip()]
-        run = [g for g in gpu if g.get("eval") == name]
+        # A superseded run (rerun after an infrastructure fault) still counts in total spend, not here.
+        run = [g for g in gpu if g.get("eval") == name and not g.get("superseded")]
         if run:
             usd = sum(g["gpu_seconds"] * g["usd_per_gpu_hour"] / 3600 for g in run)
             cost = round(usd / n * 1000, 4)
@@ -96,6 +108,21 @@ def score(rows: list[dict[str, Any]], name: str) -> dict[str, Any]:
         "tokens_out": tout,
         "cost_per_1k_usd": cost,
         "cost_method": method,
+        **(router_stats(rows) if name == "router" else {}),
+    }
+
+
+def router_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Share of commands that escalated at least once, share of rounds Nano answered, and why it escalated."""
+    rounds = [x for r in rows for x in r.get("rounds", [])]
+    reasons: dict[str, int] = {}
+    for x in rounds:
+        if x.get("escalated"):
+            reasons[x.get("escalation_reason") or "?"] = reasons.get(x.get("escalation_reason") or "?", 0) + 1
+    return {
+        "escalated_commands": round(sum(1 for r in rows if any(x.get("escalated") for x in r.get("rounds", []))) / len(rows), 4) if rows else None,
+        "nano_rounds": round(sum(1 for x in rounds if not x.get("escalated")) / len(rounds), 4) if rounds else None,
+        "escalation_reasons": reasons,
     }
 
 
@@ -130,6 +157,21 @@ def run(name: str, workers: int, limit: int) -> None:
 
         def mk(c):
             return oracle.OracleClient(c), "oracle"
+    elif name == "router":
+        # The production router (backend/app/agent.py route_turn) with its own timeouts.
+        from app import config
+
+        st = config.load()
+        tf, sup_model = client_for("super")
+        nano_client, nano_model = client_for("nano-lora")
+        nano = (nano_client, nano_model, st.nano_timeout_s)
+        sup = (tf, sup_model, st.super_timeout_s)
+
+        def route(text, state, history):
+            return agent.route_turn(nano, sup, text, state, history=history)
+
+        def mk(c):
+            return None, "router"
     else:
         shared = client_for(name)
 
@@ -140,7 +182,8 @@ def run(name: str, workers: int, limit: int) -> None:
     print(f"{name}: {len(todo)} test commands to run")
     t0 = time.time()
     with out.open("a") as f, ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = [pool.submit(lambda c: loop.solve(*mk(c), c), c) for c in todo]
+        turn = route if name == "router" else None
+        futs = [pool.submit(lambda c: loop.solve(*mk(c), c, turn=turn), c) for c in todo]
         for fut in as_completed(futs):
             tr = fut.result()
             f.write(json.dumps({**tr, "verify": verify.verify(tr)}) + "\n")
@@ -171,7 +214,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--model", required=True, choices=["super", "nano-tf", "nano", "nano-lora", "oracle"])
+    r.add_argument("--model", required=True, choices=["super", "nano-tf", "nano", "nano-lora", "router", "oracle"])
     r.add_argument("--workers", type=int, default=4)
     r.add_argument("--limit", type=int, default=0)
     sub.add_parser("report")

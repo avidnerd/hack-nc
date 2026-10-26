@@ -1,6 +1,22 @@
 {
-  "generated": 1792954277.8605509,
+  "generated": 1792983793.866219,
   "models": [
+    {
+      "name": "nano-lora",
+      "model": "scrub",
+      "n": 256,
+      "success": 0.7578,
+      "schema_valid": 1.0,
+      "grounded": 0.9102,
+      "kept": 0.7266,
+      "latency_ms_median": 758,
+      "latency_ms_p95": 2141,
+      "errors": 15,
+      "tokens_in": 1252523,
+      "tokens_out": 29827,
+      "cost_per_1k_usd": 0.7227,
+      "cost_method": "H100 GPU-seconds during the eval run x $4.5/h, 4 concurrent requests"
+    },
     {
       "name": "nano-tf",
       "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
@@ -32,6 +48,28 @@
       "tokens_out": 16378,
       "cost_per_1k_usd": 0.3857,
       "cost_method": "H100 GPU-seconds during the eval run x $4.5/h, 8 concurrent requests"
+    },
+    {
+      "name": "router",
+      "model": "router",
+      "n": 256,
+      "success": 0.75,
+      "schema_valid": 1.0,
+      "grounded": 0.918,
+      "kept": 0.7344,
+      "latency_ms_median": 763,
+      "latency_ms_p95": 2072,
+      "errors": 17,
+      "tokens_in": 1251388,
+      "tokens_out": 30374,
+      "cost_per_1k_usd": 0.7632,
+      "cost_method": "H100 GPU-seconds during the run x $4.5/h, plus Super tokens x price on escalated rounds",
+      "escalated_commands": 0.0312,
+      "nano_rounds": 0.9879,
+      "escalation_reasons": {
+        "ungrounded": 5,
+        "APITimeoutError": 3
+      }
     },
     {
       "name": "super",

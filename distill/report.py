@@ -62,7 +62,18 @@ Source: `metrics/results.json` (`make eval`). {n} test commands that no model wa
 
 Cost method:
 {methods}
+{router_note(rows)}
+Network faults: rows that failed with a connection error or a 30 s timeout at our endpoint's public tunnel are rerun (`distill/retry_transport.py`); model failures keep their rows. Superseded runs are in `distill/data/archive/` and their GPU time stays in `metrics/spend.jsonl`.
 """
+
+
+def router_note(rows: dict) -> str:
+    r = rows.get("router")
+    if not r or r.get("escalated_commands") is None:
+        return ""
+    why = ", ".join(f"{k} {v}" for k, v in sorted(r["escalation_reasons"].items(), key=lambda kv: -kv[1])) or "none"
+    return (f"\nRouter: {pct(r['escalated_commands'])} of commands escalated to Super at least once; "
+            f"Nano-LoRA answered {pct(r['nano_rounds'])} of rounds. Escalation reasons (rounds): {why}.\n")
 
 
 if __name__ == "__main__":
