@@ -65,8 +65,9 @@ Source: `metrics/vista_runs.jsonl`. **Dice** is the overlap between two masks, 2
 | | Value | Source |
 |---|---|---|
 | Point prompt, VISTA-3D inference (H100, warm) | 0.72 s | `metrics/vista_point.jsonl` |
-| Point prompt, round trip from a laptop to the endpoint | 2.0 s | `metrics/vista_point.jsonl` |
-| First prompt on a case (prepares the volume) | 3.5 s on the endpoint | `metrics/vista_point.jsonl` |
+| Point prompt, round trip from a laptop to the endpoint | 2.0 to 2.7 s | `metrics/vista_point.jsonl` |
+| First prompt on a case (prepares the volume and VISTA-3D's 26-class map for naming) | 5.0 s on the endpoint | `metrics/vista_point.jsonl` |
+| Prompt beside the liver, liver case | stomach, 106.2 mL; VISTA-3D's own classes agree on 97.4 % of the mask | `metrics/vista_point.jsonl` |
 | Prompt inside the liver: VISTA-3D's mask vs the case's liver label | 91.2 % of the mask is liver | `metrics/vista_point.jsonl` |
 | Upload to READY, one 64 MB CT | 338 s: 4 min 39 s waiting for a GPU and the image, 65 s running | `metrics/spend.jsonl` |
 | Of which VISTA-3D inference | 4.2 s | `metrics/spend.jsonl`, job `status.json` |

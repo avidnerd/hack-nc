@@ -5,9 +5,9 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
 - [x] At least one **NVIDIA open model** used **at runtime** (Nemotron 3 Super, Nemotron Nano 9B v2 + our LoRA, VISTA-3D / NV-Segment-CT, optionally Parakeet)
   - [x] Nemotron 3 Super called at runtime from the hosted backend (router fallback, rule extraction; verified 2026-10-28 from scrubplus.vercel.app)
   - [x] Nano 9B v2 + LoRA served at runtime and reached by the hosted app through the router (`scrub`, 573 ms, smoke-prod 2026-10-28)
-  - [x] VISTA-3D: full-scan Serverless Job (H100) segments the 8 gallery scans; Dice in docs/RESULTS.md. Point-prompt endpoint cut (cut order)
+  - [x] VISTA-3D: full-scan Serverless Job (H100) segments the 8 gallery scans; Dice in docs/RESULTS.md; the same Job segments uploaded scans (`/api/scans`); Serverless Endpoint `vista3d-point` answers alt-click point prompts (`metrics/vista_point.jsonl`)
 - [x] Runtime use of **Nebius Token Factory** inference API (Super from `/api/agent` and `/api/rules`)
-- [x] Runtime use of **Nebius AI Cloud** (Serverless Endpoints `scrub-backend`, `scrub-nano-scrub`; Serverless Jobs `vista3d-full`, `distill-nano`)
+- [x] Runtime use of **Nebius AI Cloud** (Serverless Endpoints `scrub-backend`, `scrub-nano-scrub`, `vista3d-point`; Serverless Jobs `vista3d-full` (gallery and uploads), `distill-nano`)
 - [x] Hosted **demo URL** works for a judge **without a webcam and without a microphone** (`scripts/judge-path.mjs`, `metrics/judge_path.json`)
   - [ ] A friend on a laptop with no webcam completes the 2-minute path cold (human check)
 - [x] Public repo (github.com/avidnerd/hack-nc)
@@ -29,4 +29,6 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
   - [x] Tavily ToS (Tavily is used at runtime by `/api/rules`; cards cached in `data/device_rules/`)
 - [x] No closed-model calls left in the hosted build (`api/llm.ts` deleted, `src/ai/llm.ts` closed; bundle grep for Gemini/Anthropic hosts is empty)
 - [x] No secrets in the repo or client bundle (`scripts/check-secrets.sh --all` passes; build-web greps the bundle)
+- [ ] Git history has no AI co-author trailers (rewritten locally 2026-10-29; force-push of `main` and `v2/m1` pending)
+- [ ] Hosted backend can start upload jobs (service-account key in the `scrub-backend` secret, then `make deploy`)
 - [ ] Devpost: video link, repo, demo URL, feedback, update note; then add the video link to README
