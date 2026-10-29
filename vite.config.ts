@@ -17,6 +17,8 @@ export default defineConfig({
       '/api/agent': 'http://localhost:8787',
       '/api/health': 'http://localhost:8787',
       '/api/grounding': 'http://localhost:8787',
+      '/api/rules': 'http://localhost:8787',
+      '/api/scans': 'http://localhost:8787',
     },
   },
   build: { target: 'es2022', assetsInlineLimit: 0 },

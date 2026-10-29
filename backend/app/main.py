@@ -5,13 +5,16 @@ from __future__ import annotations
 from functools import lru_cache
 
 import os
+import tempfile
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from . import agent, config, ground, guard, rules
+from . import agent, config, ground, guard, rules, scans
 from .engine import device_rules
 from .tools import tool_specs
 
@@ -29,6 +32,9 @@ app.add_middleware(
 agent_limit = guard.RateLimiter(int(os.environ.get("AGENT_RPM", "30")))
 rules_limit = guard.RateLimiter(int(os.environ.get("RULES_RPM", "3")))
 budget = guard.Budget(float(os.environ.get("DAILY_BUDGET_USD", "0")))
+# Each upload starts an H100 job: a few per IP per hour, and a cap per day for everyone.
+scans_limit = guard.RateLimiter(int(os.environ.get("SCANS_PER_HOUR", "3")), window_s=3600)
+scans_daily = guard.RateLimiter(int(os.environ.get("SCANS_PER_DAY", "20")), window_s=86400)
 
 
 def _limit(limiter: guard.RateLimiter, request: Request) -> None:
@@ -65,6 +71,7 @@ def health() -> dict:
         "nano": bool(settings.nano_base_url),
         "tools": len(tool_specs()),
         "prompt_version": agent.PROMPT_VERSION,
+        "scans": scans.job_config().ready,
     }
 
 
@@ -115,3 +122,45 @@ def device_rules_card(device: str, request: Request) -> dict:
         raise HTTPException(502, f"rule lookup failed: {type(e).__name__}") from e
     budget.charge(card["usage"]["prompt_tokens"], card["usage"]["completion_tokens"])
     return card
+
+
+@app.post("/api/scans")
+async def upload_scan(request: Request, name: str | None = None) -> dict:
+    """Body: one CT as .nii or .nii.gz (raw bytes, at most 300 MB)."""
+    if not scans.job_config().ready:
+        raise HTTPException(503, "scan service not configured")
+    if int(request.headers.get("content-length") or 0) > scans.MAX_BYTES:
+        raise HTTPException(413, "scans are capped at 300 MB")
+    _limit(scans_limit, request)
+    if not scans_daily.allow("all"):
+        raise HTTPException(503, "daily scan limit reached")
+    with tempfile.TemporaryFile() as body:
+        n = 0
+        async for chunk in request.stream():
+            n += len(chunk)
+            if n > scans.MAX_BYTES:
+                raise HTTPException(413, "scans are capped at 300 MB")
+            body.write(chunk)
+        body.seek(0)
+        try:
+            return await run_in_threadpool(scans.start, body, name)
+        except scans.ScanError as e:
+            raise HTTPException(e.status, str(e)) from e
+
+
+@app.get("/api/scans/{scan_id}")
+def scan_status(scan_id: str) -> dict:
+    try:
+        return scans.status(scan_id)
+    except scans.ScanError as e:
+        raise HTTPException(e.status, str(e)) from e
+
+
+@app.get("/api/scans/{scan_id}/assets/{name}")
+def scan_asset(scan_id: str, name: str) -> StreamingResponse:
+    try:
+        body, size = scans.asset(scan_id, name)
+    except scans.ScanError as e:
+        raise HTTPException(e.status, str(e)) from e
+    kind = "application/json" if name.endswith(".json") else "application/octet-stream"
+    return StreamingResponse(iter(lambda: body.read(1 << 20), b""), media_type=kind, headers={"content-length": str(size)})

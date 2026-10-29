@@ -21,8 +21,13 @@ SECRET=scrub-backend
 
 payload=$(python3 - <<'EOF'
 import json, os
-keys = ["NEBIUS_TF_API_KEY", "TAVILY_API_KEY", "NANO_API_KEY"]
-print(json.dumps([{"key": k, "string_value": os.environ[k]} for k in keys if os.environ.get(k)]))
+keys = ["NEBIUS_TF_API_KEY", "TAVILY_API_KEY", "NANO_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+vals = {k: os.environ[k] for k in keys if os.environ.get(k)}
+# The job-launching service account key (see docs/OPERATIONS.md), if present.
+key = os.environ.get("NEBIUS_SA_KEY_FILE")
+if key and os.path.exists(key):
+    vals["NEBIUS_SA_KEY_JSON"] = open(key).read()
+print(json.dumps([{"key": k, "string_value": v} for k, v in vals.items()]))
 EOF
 )
 SID=$(nebius mysterybox secret list --parent-id "$PROJECT" --format json | python3 -c 'import json,sys;print(next((s["metadata"]["id"] for s in json.load(sys.stdin).get("items",[]) if s["metadata"]["name"]=="'$SECRET'"),""))')
@@ -36,6 +41,14 @@ ENVS=(--env "NEBIUS_TF_BASE_URL=$NEBIUS_TF_BASE_URL" --env "NEBIUS_TF_MODEL_SUPE
   --env METRICS_DIR=/tmp/metrics --env "DAILY_BUDGET_USD=${DAILY_BUDGET_USD:-15}" --env AGENT_RPM=30 --env RULES_RPM=3
   --env "ALLOWED_ORIGINS=$ORIGINS")
 [ -n "${NANO_BASE_URL:-}" ] && ENVS+=(--env "NANO_BASE_URL=$NANO_BASE_URL")
+SECRETS=(--env-secret "NEBIUS_TF_API_KEY=$SECRET" --env-secret "TAVILY_API_KEY=$SECRET" --env-secret "NANO_API_KEY=$SECRET")
+# Uploaded scans: bucket keys, and the service account key that starts the vista3d-full job.
+if [ -n "${NEBIUS_SA_KEY_FILE:-}" ] && [ -f "$NEBIUS_SA_KEY_FILE" ]; then
+  ENVS+=(--env "VISTA_JOB_PROJECT_ID=$VISTA_JOB_PROJECT_ID" --env "NEBIUS_S3_ENDPOINT=$NEBIUS_S3_ENDPOINT"
+    --env "NEBIUS_S3_BUCKET=$NEBIUS_S3_BUCKET" --env "NEBIUS_S3_BUCKET_ID=$NEBIUS_S3_BUCKET_ID"
+    --env "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION" --env "SCANS_PER_HOUR=${SCANS_PER_HOUR:-3}" --env "SCANS_PER_DAY=${SCANS_PER_DAY:-20}")
+  SECRETS+=(--env-secret "AWS_ACCESS_KEY_ID=$SECRET" --env-secret "AWS_SECRET_ACCESS_KEY=$SECRET" --env-secret "NEBIUS_SA_KEY_JSON=$SECRET")
+fi
 OUT=$(mktemp)
 nebius ai endpoint create --parent-id "$PROJECT" --name scrub-backend \
   --image python:3.11-slim \
@@ -44,7 +57,7 @@ nebius ai endpoint create --parent-id "$PROJECT" --name scrub-backend \
   --container-port 8000 \
   --platform cpu-d3 --preset 2vcpu-8gb --disk-size 20Gi \
   "${ENVS[@]}" \
-  --env-secret "NEBIUS_TF_API_KEY=$SECRET" --env-secret "TAVILY_API_KEY=$SECRET" --env-secret "NANO_API_KEY=$SECRET" \
+  "${SECRETS[@]}" \
   --async --format json > "$OUT"
 ID=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d.get("metadata",{}).get("id") or d.get("resource_id") or d["metadata"]["resource_id"])' "$OUT")
 echo "endpoint $ID (commit $SHA)"

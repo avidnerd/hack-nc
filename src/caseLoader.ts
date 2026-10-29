@@ -11,6 +11,7 @@
 
 import type { CaseData, CaseMeta, CenterlineData, MeshEntry, MeshSet } from './types.ts';
 import { setLoading } from './state.ts';
+import { apiUrl } from './ai/agentClient.ts';
 
 const DATA_ROOT = 'data';
 
@@ -40,6 +41,8 @@ export async function loadGallery(): Promise<GalleryEntry[]> {
 }
 
 export const isGalleryCase = (id: string): boolean => id.startsWith('msd_');
+/** A scan a user uploaded and the vista3d-full job segmented (backend /api/scans). */
+export const isUploadCase = (id: string): boolean => /^upload_[0-9a-f]{12}$/.test(id);
 
 export class CaseLoadError extends Error {
   constructor(
@@ -149,8 +152,10 @@ function expectedVoxels(meta: CaseMeta): number {
  */
 export async function loadCase(id: string): Promise<CaseData> {
   const gallery = isGalleryCase(id);
-  const base = gallery ? `${GALLERY_ROOT}/${id}` : `${DATA_ROOT}/${id}`;
-  const gz = gallery || GZ_DATA;
+  const upload = isUploadCase(id);
+  // Uploaded scans stream raw from the backend, which reads the job's bucket output.
+  const base = upload ? `${apiUrl('scans')}/${id}/assets` : gallery ? `${GALLERY_ROOT}/${id}` : `${DATA_ROOT}/${id}`;
+  const gz = !upload && (gallery || GZ_DATA);
 
   setLoading('Reading case header', 4);
   const meta = await fetchJson<CaseMeta>(`${base}/meta.json`);

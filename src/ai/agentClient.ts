@@ -57,7 +57,7 @@ const AGENT_URL = CONFIGURED_URL || '/api/agent';
  */
 export const BACKEND_CONFIGURED = import.meta.env.DEV || CONFIGURED_URL !== '';
 /** Sibling endpoints of the agent URL (…/api/agent → …/api/grounding). */
-const apiUrl = (name: string) => AGENT_URL.replace(/\/agent$/, `/${name}`);
+export const apiUrl = (name: string) => AGENT_URL.replace(/\/agent$/, `/${name}`);
 // Super's budget is 6000 ms (CLAUDE.md 4.3); allow the network on top.
 const TIMEOUT_MS = 7000;
 export const MAX_ROUNDS = 5;
@@ -123,14 +123,21 @@ export async function askAgent(
 /* ------------------------------------------------------------ availability */
 
 let available = false;
+let scans = false;
 let coolUntil = 0;
 
 /** Ask the backend whether it can serve the agent. Call once at boot. */
 export async function probeAgent(): Promise<boolean> {
   if (!BACKEND_CONFIGURED) return (available = false);
-  const h = await getJson<{ ok?: boolean; token_factory?: boolean }>(apiUrl('health'));
+  const h = await getJson<{ ok?: boolean; token_factory?: boolean; scans?: boolean }>(apiUrl('health'));
   available = !!h?.ok && h.token_factory !== false;
+  scans = !!h?.ok && !!h.scans;
   return available;
+}
+
+/** Whether the backend can start a VISTA-3D job for an uploaded scan. */
+export function scansAvailable(): boolean {
+  return scans;
 }
 
 export function agentAvailable(): boolean {

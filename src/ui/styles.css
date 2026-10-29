@@ -1445,3 +1445,60 @@ body.dropping::after {
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* Segment on Nebius: the upload job's real stages. */
+.scanjob-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
+.scanjob-steps {
+  list-style: none;
+  margin: 10px 0 2px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.scanjob-steps li {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.scanjob-steps li.now {
+  color: var(--ink);
+  border-color: var(--accent-dim);
+}
+.scanjob-steps li.done {
+  color: var(--ink-dim);
+}
+.scanjob-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.scanjob-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.scanjob-actions button {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 3px;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  cursor: pointer;
+}
+.scanjob-actions .scanjob-go {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.scanjob-actions button[hidden] {
+  display: none;
+}

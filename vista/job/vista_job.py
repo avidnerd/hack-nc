@@ -112,10 +112,16 @@ def process(pipe, ct_src: Path, case: str, name: str | None, truth: Path | None,
     case_out = out / case
     case_out.mkdir(parents=True, exist_ok=True)
 
-    def stage(label: str, t0: float) -> None:
+    def status(now: str) -> None:
+        # The stage the job is in now; /api/scans shows it as the progress stage.
+        (case_out / "status.json").write_text(json.dumps({"stage": now, **run}))
+
+    def stage(label: str, t0: float, now: str) -> None:
         run["stages"][label] = round(time.perf_counter() - t0, 2)
-        (case_out / "status.json").write_text(json.dumps({"stage": label.upper(), **run}))
+        status(now)
         print(f"[{case}] {label} {run['stages'][label]} s", flush=True)
+
+    status("SEGMENTING")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -128,7 +134,7 @@ def process(pipe, ct_src: Path, case: str, name: str | None, truth: Path | None,
         label_map = segment(pipe, ct, tmp / "vista")
         torch.cuda.synchronize()
         run["gpu_peak_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
-        stage("segmenting", t)
+        stage("segmenting", t, "CENTERLINE")
 
         msd_path, counts = split_masks(label_map, tmp / "seg")
         run["voxels"] = counts
@@ -159,7 +165,7 @@ def process(pipe, ct_src: Path, case: str, name: str | None, truth: Path | None,
             (case_out / "vista_run.json").write_text(json.dumps(run, indent=1))
             print(log.stdout[-2000:], log.stderr[-2000:], flush=True)
             return run
-        stage("centerline", t)
+        stage("centerline", t, "CENTERLINE")
 
         dest = case_out / "assets"
         put(work / "public" / "data" / case, dest)

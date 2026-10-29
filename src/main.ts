@@ -25,6 +25,7 @@ import {
   runAgentTurn,
   setAgentAvailable,
   agentLog,
+  scansAvailable,
 } from './ai/agentClient.ts';
 import { executeTool, getState, noteDevice, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
 import { findCard } from './devices/deviceRules.ts';
@@ -40,7 +41,8 @@ import {
   planMarkdown,
   type PatientFacts,
 } from './ai/narrate.ts';
-import { CASES, isGalleryCase, loadCase, loadGallery } from './caseLoader.ts';
+import { CASES, isGalleryCase, isUploadCase, loadCase, loadGallery } from './caseLoader.ts';
+import { ScanJobDialog } from './ui/scanJob.ts';
 import { Gallery } from './ui/gallery.ts';
 import { cameraBasis, clamp, cross, dot, easeInOut, length, lerp, normalize, scale, slerp, sub } from './coords.ts';
 import { StentSession } from './devices/stentSession.ts';
@@ -144,6 +146,7 @@ hands.onFrame = (obs, t) => handControl.update(gestures.update(obs, t), t);
 const optimizer = new OptimizerClient();
 const palette = new CommandPalette((text) => runCommand(text, text, 'palette'));
 const gallery = new Gallery(loadGallery, (id) => switchCase(id));
+const scanJob = new ScanJobDialog((id) => switchCase(id), (s) => say(s));
 const hood = new UnderTheHood();
 new GroundingCounter(document.querySelector('.tb-left') as HTMLElement);
 const speech = new Speech();
@@ -277,6 +280,9 @@ async function uploadScan(files: File[]): Promise<void> {
           ? `Labels: ${names.join(', ')}.`
           : 'No labels: viewing, cutting and measuring.';
     say(`Scan loaded. ${what}`);
+    // A CT with no labels: offer VISTA-3D on Nebius, which returns a planned case.
+    const ct = files.filter((f) => /\.nii(\.gz)?$/i.test(f.name));
+    if (!names.length && ct.length === 1 && scansAvailable()) scanJob.offer(ct[0]);
   } catch (err) {
     console.error('[upload]', err);
     say(err instanceof Error ? err.message : 'Could not read that file.');
@@ -495,7 +501,7 @@ async function playDemo(): Promise<void> {
 }
 
 async function switchCase(id: string): Promise<void> {
-  const known = isGalleryCase(id) ? { id } : (CASES.find((c) => c.id === id) ?? CASES[0]);
+  const known = isGalleryCase(id) || isUploadCase(id) ? { id } : (CASES.find((c) => c.id === id) ?? CASES[0]);
   try {
     await loadCaseData(await loadCase(known.id), known.id);
   } catch (err) {
