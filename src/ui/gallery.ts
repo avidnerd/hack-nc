@@ -95,8 +95,11 @@ export class Gallery {
   }
 
   private render(entries: GalleryEntry[]): void {
+    // Cases with a segmented tumour first, best tumour Dice on top: those are
+    // the ones a cut can be planned on.
+    const order = [...entries].sort((a, b) => Number(b.tumorMl > 0) - Number(a.tumorMl > 0) || (b.diceTumor ?? 0) - (a.diceTumor ?? 0));
     this.list.replaceChildren(
-      ...entries.map((e) => {
+      ...order.map((e) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'gallery-case';

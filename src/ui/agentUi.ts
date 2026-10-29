@@ -11,7 +11,7 @@ export const PALETTE_EXAMPLES = [
   'optimize the cut with a 10 mm margin',
   'how much liver is left',
   'nudge the plane 5 mm toward the tumor',
-  'place a stent',
+  'size a stent for a Gore Excluder',
   'resect',
   'write the plan',
 ];

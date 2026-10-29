@@ -14,3 +14,5 @@
 {"ts": 1792983622.5805252, "kind": "eval", "eval": "nano-lora", "commands": 256, "workers": 4, "gpu": "H100 80GB", "gpu_seconds": 148.0, "usd_per_gpu_hour": 4.5}
 {"ts": 1792983793.0822341, "kind": "eval", "eval": "router", "commands": 256, "workers": 4, "gpu": "H100 80GB", "gpu_seconds": 150.5, "usd_per_gpu_hour": 4.5}
 {"ts":"2026-10-26T03:03:31Z","kind":"endpoint","name":"scrub-nano-scrub (merged LoRA, vLLM)","id":"aiendpoint-e00wgg4g34x43z1mcc","gpu":"H100 80GB","gpus":1,"note":"created about 20:25Z, ready 20:51Z, stopped now; eval passes logged separately"}
+{"ts": "2026-10-29T00:26:28Z", "kind": "endpoint", "name": "scrub-nano-scrub restart for M5 hosted check and recording", "id": "aiendpoint-e00wgg4g34x43z1mcc", "gpu": "H100 80GB", "gpus": 1, "note": "start 00:08:53Z, /v1/models answered 00:26:28Z (17 min 35 s); running until stopped, stop time logged separately"}
+{"ts": "2026-10-29T00:16:00Z", "kind": "endpoint", "name": "scrub-backend (cpu-d3 2vcpu-8gb, eu-south1)", "id": "aiendpoint-e07ca70g7h017hbs4s", "gpu": null, "gpus": 0, "note": "created 00:12:50Z, /api/health ok within about 4 min; always on"}

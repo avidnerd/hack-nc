@@ -24,6 +24,7 @@ import {
   probeAgent,
   runAgentTurn,
   setAgentAvailable,
+  agentLog,
 } from './ai/agentClient.ts';
 import { executeTool, getState, noteDevice, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
 import { findCard } from './devices/deviceRules.ts';
@@ -346,6 +347,17 @@ async function llmRescue(cmd: string): Promise<void> {
 async function runCommand(cmd: string, heard: string, source: 'voice' | 'palette'): Promise<void> {
   state.transcriptAt = performance.now();
   set('transcript', heard);
+  const parse = () => parseIntent(source === 'palette' ? (stripWake(cmd) ?? cmd.trim().toLowerCase()) : cmd);
+  // DECISION: switching cases is app navigation, not a planning tool, so no
+  // agent tool covers it; the grammar takes it without a model round trip.
+  // "Size a stent for <device>" too: the grammar runs card, placement and
+  // verdict in one step, where the model (trained on default rules) stopped
+  // after lookup_device_rules.
+  const nav = parse();
+  if (nav?.kind === 'loadCase' || (nav?.kind === 'placeStent' && nav.device)) {
+    dispatchIntent(nav, 'voice');
+    return;
+  }
   if (agentAvailable()) {
     // Tools reuse the voice code paths; their narration is held back so the
     // agent's reply is the one line said.
@@ -368,7 +380,7 @@ async function runCommand(cmd: string, heard: string, source: 'voice' | 'palette
     }
     console.info('[agent] falling back to the grammar:', turn.error ?? 'empty reply');
   }
-  const intent = parseIntent(source === 'palette' ? (stripWake(cmd) ?? cmd.trim().toLowerCase()) : cmd);
+  const intent = nav ?? parse();
   if (intent) dispatchIntent(intent, 'voice');
   else await llmRescue(cmd);
 }
@@ -1676,6 +1688,8 @@ declare global {
       agent: typeof askAgent;
       /** Run one agent tool against the live app, as the agent would. */
       tool: typeof executeTool;
+      /** The "Under the hood" entries: one per agent round. */
+      agentLog: typeof agentLog;
       /** Force the agent path on or off (tests with a mocked backend). */
       setAgent: typeof setAgentAvailable;
       /** Send a typed request down the palette path. */
@@ -1695,6 +1709,7 @@ window.scrub = {
     onVoice(cmd ?? text.trim().toLowerCase(), text, true);
   },
   agent: askAgent,
+  agentLog,
   tool: executeTool,
   setAgent: setAgentAvailable,
   command: (text) => runCommand(text, text, 'palette'),

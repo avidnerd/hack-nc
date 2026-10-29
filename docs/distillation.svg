@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 250" font-family="Inter, Helvetica, Arial, sans-serif" font-size="14">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#9aa7b4"/></marker>
+  </defs>
+  <rect width="960" height="250" fill="#0d1117"/>
+  <g fill="#161f2b" stroke="#3a4656" stroke-width="1.5">
+    <rect x="20" y="50" width="135" height="120" rx="8"/>
+    <rect x="175" y="50" width="135" height="120" rx="8"/>
+    <rect x="330" y="50" width="145" height="120" rx="8" stroke="#2fd3c7"/>
+    <rect x="495" y="50" width="135" height="120" rx="8"/>
+    <rect x="650" y="50" width="135" height="120" rx="8"/>
+    <rect x="805" y="50" width="135" height="120" rx="8"/>
+  </g>
+  <g fill="#e6edf3">
+    <text x="34" y="78" font-weight="600">1 Generate</text>
+    <text x="34" y="102" fill="#9aa7b4" font-size="12">6,000 commands</text>
+    <text x="34" y="120" fill="#9aa7b4" font-size="12">templates x Super</text>
+    <text x="34" y="138" fill="#9aa7b4" font-size="12">paraphrases, goals</text>
+    <text x="189" y="78" font-weight="600">2 Teach</text>
+    <text x="189" y="102" fill="#9aa7b4" font-size="12">Nemotron 3 Super</text>
+    <text x="189" y="120" fill="#9aa7b4" font-size="12">5,744 traces, engine</text>
+    <text x="189" y="138" fill="#9aa7b4" font-size="12">runs every tool</text>
+    <text x="344" y="78" font-weight="600" fill="#2fd3c7">3 Verify (engine)</text>
+    <text x="344" y="102" fill="#9aa7b4" font-size="12">schema, goal predicate,</text>
+    <text x="344" y="120" fill="#9aa7b4" font-size="12">ground_check</text>
+    <text x="344" y="146" font-size="13">kept 4,133 (72.0 %)</text>
+    <text x="509" y="78" font-weight="600">4 LoRA</text>
+    <text x="509" y="102" fill="#9aa7b4" font-size="12">Serverless Job, H100</text>
+    <text x="509" y="120" fill="#9aa7b4" font-size="12">Nano 9B v2, r=16</text>
+    <text x="509" y="138" fill="#9aa7b4" font-size="12">loss 0.710 → 0.252</text>
+    <text x="664" y="78" font-weight="600">5 Serve</text>
+    <text x="664" y="102" fill="#9aa7b4" font-size="12">Serverless Endpoint</text>
+    <text x="664" y="120" fill="#9aa7b4" font-size="12">vLLM, merged weights</text>
+    <text x="664" y="138" fill="#9aa7b4" font-size="12">tool-call parser</text>
+    <text x="819" y="78" font-weight="600">6 Eval</text>
+    <text x="819" y="102" fill="#9aa7b4" font-size="12">256 held-out</text>
+    <text x="819" y="120" fill="#9aa7b4" font-size="12">same verifier</text>
+    <text x="819" y="146" font-size="13">75.8 % at 0.8 s</text>
+  </g>
+  <g stroke="#9aa7b4" stroke-width="1.5" marker-end="url(#a)">
+    <path d="M155 110H175"/><path d="M310 110H330"/><path d="M475 110H495"/><path d="M630 110H650"/><path d="M785 110H805"/>
+  </g>
+  <text x="20" y="32" fill="#9aa7b4" font-size="12" letter-spacing="1">THE ENGINE LABELS THE DATA: ONLY TRACES IT VERIFIES BECOME TRAINING DATA</text>
+  <text x="20" y="214" fill="#9aa7b4" font-size="12">Teacher Super: 77.3 % success, 1.2 s median, $1.98 per 1,000 commands. Student Nano 9B + LoRA: 75.8 %, 0.8 s, $0.72. Source: metrics/results.json</text>
+</svg>

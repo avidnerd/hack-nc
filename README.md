@@ -1,212 +1,211 @@
 # Scrub+
-WINNER (General 1st Place) of HackNC 2026 :)
 
-![Scrub showing a gesture-controlled cut through a liver CT](docs/shots/live-cut.png)
+**A surgical planning agent built entirely on NVIDIA open models.** A gloved hand in front of a laptop webcam rotates and slices a real CT volume. Voice or typed commands plan a liver cut or size an aortic stent graft. The geometry engine is the ground truth: it generates verified training data, Nebius AI Cloud distills a fast Nemotron agent from it, and nothing the agent says can contain a number the engine did not compute. Patient CT never touches a closed model.
 
+![An open palm moves a resection plane through a liver CT](docs/gifs/cut.gif)
 
+Scrub+ v1 won 1st place overall at HackNC 2026. This README covers v2, built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 
-> rethinking how surgeons interact with medical imaging, without touching a computer.
+## Demo
 
-# problem
+- **Hosted app:** https://scrubplus.vercel.app/app/
+- **Video (under 3 minutes):** _link added at submission_
+- **Landing page:** https://scrubplus.vercel.app
 
-Surgeons often need to reference CT scans and other medical images during operations. But once they're scrubbed in, they can't use a regular mouse or keyboard without compromising sterility.
+### Try it without a webcam or microphone
 
-- Instead, they have to ask someone outside the sterile field to navigate the images for them.
-- Finding a specific structure, changing the viewing angle, or taking a measurement can require multiple rounds of verbal instructions.
-- In a [2016 study](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0153596), completing an image-navigation task by directing an assistant took an average of 246 seconds, compared with 215 seconds using gestures.
+1. Open https://scrubplus.vercel.app/app/ in Chrome. Click **Skip, use mouse** on the tutorial.
+2. Click **Gallery** and pick the top case (MSD liver case 39, segmented by VISTA-3D on Nebius).
+3. Press `/` and type `optimize the cut with a 10 mm margin`. Then type `resect`.
+4. Type `open the aorta case`, then `size a stent for a Gore Excluder`. The rule card shows the IFU limits Tavily found, with source links, and the verdict uses them.
+5. Type `write the plan`. Click **Under the hood** to see every agent call: model, latency, tools, grounded.
 
-Touchless medical image viewers have been developed to address this, but they have limitations:
+Mouse: drag to rotate, shift-drag to move the cut plane, scroll to zoom, click two points to measure. `?` lists the keyboard shortcuts.
 
-- Most focus on basic controls like scrolling, zooming, and rotating. Surgeons still have to manually find what they're looking for.
-- They generally don't support more complex tasks like measuring distances between anatomical structures or comparing surgical plans.
-- Some require specialized cameras or other hardware.
+This path runs cold against production in our scripted check (`node scripts/judge-path.mjs`, results in `metrics/judge_path.json`).
 
-The problem isn't just that surgeons can't touch the computer. **It's that getting a specific piece of information from a scan can take far more steps than it should.**
+## Results
 
-Scrub+ addresses both problems by letting surgeons use hand gestures and voice commands to navigate 3D CT scans, find anatomical structures, take measurements, and explore surgical plans.
+Every number below comes from a file in `metrics/`. The full tables, with methods, are in [docs/RESULTS.md](docs/RESULTS.md).
 
-# inspiration
+### Agent: 256 held-out commands
 
-My dad recently had to undergo an urgent heart procedure because of serious coronary blockages. It was a complicated case, and my family had a hard time finding a specialist who could perform it.
+Each command runs end to end with the Python engine executing every tool call. A command succeeds when its machine-checkable goal holds on the final engine state (for example `margin >= 10 and vessels_crossed == 0`). The held-out set uses phrasings no model was trained on (see [Distillation](#the-distillation-pipeline) for how the split was made).
 
-While all of this was happening, I spoke with some of the medical staff and got more interested in the practical side of how complex procedures work. I also started reading about problems with medical imaging workflows, including the pressure on radiology teams.
+| Model | Task success | Schema valid | Grounded | Median latency | p95 latency | Cost per 1,000 commands |
+|---|---|---|---|---|---|---|
+| Nemotron 3 Super (Token Factory) | 77.3 % | 99.6 % | 88.7 % | 1.2 s | 4.6 s | $1.98 |
+| Nemotron 3 Nano 30B A3B, few-shot (Token Factory) | 46.1 % | 100.0 % | 96.5 % | 7.1 s | 13.2 s | $0.61 |
+| Nemotron Nano 9B v2, base (our Nebius endpoint) | 46.1 % | 98.4 % | 98.8 % | 0.9 s | 1.2 s | $0.39 |
+| **Nemotron Nano 9B v2 + our LoRA (our Nebius endpoint)** | **75.8 %** | **100.0 %** | **91.0 %** | **0.8 s** | **2.1 s** | **$0.72** |
+| Router: Nano-LoRA first, Super on escalation | 75.0 % | 100.0 % | 91.8 % | 0.8 s | 2.1 s | $0.76 |
 
-That experience wasn't specifically about touchless controls. It was what got me thinking about healthcare problems that could be approached from an engineering perspective.
+Source: `metrics/results.json`.
 
-I eventually came across touchless CT viewers that let surgeons control medical images using hand gestures. While the idea was really cool, I noticed a few limitations with existing approaches:
+- The distilled 9B model reaches 98 % of the 120B teacher's success rate (75.8 / 77.3), at 0.8 s median against 1.2 s, and 36 % of its cost per command.
+- LoRA training moved the 9B model from 46.1 % to 75.8 % success.
+- The router escalated 3.1 % of commands to Super and did not raise success. The LoRA's main failure is running out of rounds (15 of 256 commands), which per-round escalation checks cannot see. We report it as measured.
+- Grounded means the model's own final sentence passed `ground_check` with no rewrite or template fallback. Every reply the app shows passes the check, because a failing reply is regenerated once and then replaced by a template built from tool results.
 
-- Most only support basic navigation like scrolling through slices, zooming, and rotating images; essentially replacing a mouse with hand gestures.
-- Surgeons still have to manually search through scans to find specific anatomical structures or the information they need.
-- They don't support more advanced tasks like measuring the distance between a tumor and a blood vessel or comparing different surgical plans.
-- Some also require specialized hardware, like depth cameras, rather than a regular laptop webcam.
+### VISTA-3D on Nebius: 8 MSD liver scans
 
-I built Scrub to address all these limitations.
-
-# design goals
-
-- **touchless controls** using a laptop webcam and voice commands, without a headset or depth camera
-- **less manual navigation** when someone wants to find a particular structure or measurement
-- **real CT data** rather than a generic anatomy model
-- **actual calculations** for distances, volumes, and margins instead of asking an LLM to guess
-- **mouse and keyboard fallbacks** because webcam tracking and speech recognition aren't always reliable
-
-# the copilot
-
-The main idea is being able to say "scrub, show me..." instead of manually finding the right angle and slice.
-
-| command | what it does |
+| | Value |
 |---|---|
-| "scrub, show me the tumor relative to the portal vein" | highlights both structures, measures their closest gap, and moves the camera to show it |
-| "scrub, show me where the tumor is closest to a major vessel" | searches the available vessel segmentations and shows the closest point with a CT cross-section |
-| "scrub, focus on the left kidney" | finds and frames the kidney |
-| "scrub, save this plan" | saves the current cut and view |
-| "scrub, show me the original plan" | restores the saved plan |
-| "scrub, compare this cut to the original plan" | compares the margin, remnant volume, and vessel intersections |
-| "scrub, go back to the previous view" | returns to the previous view |
+| Liver Dice (median, 8 scans) | 0.967 (range 0.959 to 0.980) |
+| Tumour Dice, scans with a lesion over 2 mL | 0.549 to 0.841 |
+| VISTA-3D inference per scan (median, H100) | 5.2 s |
+| Scan to app assets per scan (median) | 28.9 s |
 
-The language model interprets requests that fall outside the predefined voice commands, while all measurements are calculated directly from the CT data and segmentation masks.
+Source: `metrics/vista_runs.jsonl`. **Dice** is the overlap between two masks, 2|A∩B| / (|A|+|B|), from 0 (no overlap) to 1 (identical). Lesions under about 1 mL are labelled as liver, so their tumour Dice is 0. VISTA-3D's training data includes MSD Task03, so these scans may have been seen in training.
 
-# your own scans
+### Device rules from Tavily
 
-You can load your own CT with the "Upload CT" button, the `I` key, or by dropping a `.nii` / `.nii.gz` file on the page. It is read in the browser and never uploaded anywhere.
+The Gore Excluder card, extracted from goremedical.com and checked word for word against the source text: neck length ≥ 15 mm, neck diameter 19 to 32 mm, angulation ≤ 60°. Source: `data/device_rules/gore-excluder.json`. On the aorta case the neck measures 18.6 mm, so the Excluder is rejected on neck diameter, and the Excluder Conformable (16 to 32 mm) seals.
 
-- A CT on its own can be rotated, cut, windowed and measured.
-- If you also add a label map that uses the MSD liver convention (1 = liver, 2 = tumor), the planning tools and the copilot turn on. Other label values are shown as numbered structures instead of guessed organ names.
+## NVIDIA models used
 
-Segmentation is not done in the browser, so a scan without labels gets the viewing tools only. DICOM needs converting to NIfTI first (for example with dcm2niix).
+| Model | Exact ID | What it does | Where it runs |
+|---|---|---|---|
+| Nemotron 3 Super | `nvidia/nemotron-3-super-120b-a12b` | Teacher for the distillation data (paraphrases and 5,744 tool-calling traces); runtime fallback in the router; extracts IFU rules from Tavily results | Nebius Token Factory |
+| Nemotron Nano 9B v2 + our LoRA | base `nvidia/NVIDIA-Nemotron-Nano-9B-v2`, served as `scrub` | The runtime agent: turns a request into tool calls, then a one-line grounded answer | Nebius AI Cloud Serverless Endpoint (vLLM 0.11, 1x H100) |
+| Nemotron 3 Nano 30B A3B | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Few-shot baseline in the results table | Nebius Token Factory |
+| VISTA-3D | `nvidia/NV-Segment-CT` | Segments liver, tumour, vessels, aorta and kidneys on every gallery CT | Nebius AI Cloud Serverless Job (1x H100) |
 
-# learning the gestures
+Model IDs were read from Token Factory's `GET /v1/models` (`metrics/tf_models.json`), not typed from memory.
 
-On the first visit, a short tutorial runs on a simple practice object. Each step checks what your hand is doing and only moves on once the gesture works, with a hint when the pose is wrong. Every step also shows the mouse or keyboard alternative, and you can skip it. Press `H` or click "Practice" to run it again.
+## How Nebius Token Factory and AI Cloud are used
 
-# functions
+| Product | Resource | Why this product | Hardware |
+|---|---|---|---|
+| Token Factory | Nemotron 3 Super, OpenAI-compatible API | A 120B teacher and fallback with native tool calling, paid per token, no GPUs to manage | Managed |
+| AI Cloud Serverless Job | `distill-nano`: LoRA fine-tune of Nano 9B v2 (`distill/job/`) | A one-off GPU run that stops by itself. Token Factory fine-tuning does not list Nemotron models | 1x H100 SXM, 64 min of training |
+| AI Cloud Serverless Job | `vista3d-full`: segmentation and post-processing of the gallery (`vista/job/`) | Batch work on many scans, billed only while it runs | 1x H100 SXM |
+| AI Cloud Serverless Endpoint | `scrub-nano-scrub`: vLLM serving the merged LoRA | Our own weights behind an OpenAI-compatible URL with a bearer token; can be stopped when idle | 1x H100 SXM, eu-north1 |
+| AI Cloud Serverless Endpoint | `scrub-backend`: the FastAPI agent router (`backend/`) | A small always-on API next to the models; keys come from SecretStash | cpu-d3, 2 vCPU, eu-south1 |
 
-These are the gesture and voice-control demos from the app.
+**Cost per patient plan.** A plan is about six commands (load, optimize, resect, stent, card, plan). At the measured router cost of $0.76 per 1,000 commands that is $0.005. Segmenting a new scan takes a median 28.9 s on an H100, which is $0.036 at $4.50 per GPU-hour. Endpoint idle time is extra, which is why the endpoints are stopped outside recording and judging ([docs/OPERATIONS.md](docs/OPERATIONS.md)).
 
-<table>
-<tr>
-<td width="50%"><img src="docs/gifs/cut.gif" alt="An open palm moves a resection plane through a liver CT"><br><b>Open hand — cut</b><br>Move and tilt a resection plane. The measurements change with it.</td>
-<td width="50%"><img src="docs/gifs/rotate.gif" alt="A pinch gesture rotates the 3D CT volume"><br><b>Pinch and drag — rotate</b><br>Grab the 3D scan and turn it.</td>
-</tr>
-<tr>
-<td><img src="docs/gifs/measure.gif" alt="Two fingers create a distance caliper"><br><b>Two fingers — measure</b><br>Measure distances in millimeters.</td>
-<td><img src="docs/gifs/lock.gif" alt="A fist locks the cutting plane"><br><b>Fist — lock</b><br>Freeze the cut and separate the resected part visually.</td>
-</tr>
-<tr>
-<td><img src="docs/gifs/zoom.gif" alt="Two pinching hands zoom the model"><br><b>Two pinches — zoom</b><br>Pull your hands apart to zoom in.</td>
-<td><img src="docs/gifs/optimize.gif" alt="A voice command searches for an alternative resection plane"><br><b>"scrub, optimize"</b><br>Search nearby cutting planes using the current planning constraints.</td>
-</tr>
-<tr>
-<td><img src="docs/gifs/stent.gif" alt="Voice-controlled placement of a virtual aortic stent"><br><b>"scrub, place the stent"</b><br>Place a virtual graft in the aorta and inspect its geometric fit.</td>
-<td></td>
-</tr>
-</table>
+## Architecture
 
-**the clips are generated by replaying recorded hand-landmark sequences through the app.
+![Architecture](docs/architecture.svg)
 
-# how i built it
-
-- **CT data**
-  - Used a liver CT from the Medical Segmentation Decathlon.
-  - Processed the scan in Python and added anatomical labels using TotalSegmentator.
-  - The processed data is included with the app so you don't need to run the Python pipeline to try it.
-
-- **3D rendering**
-  - Built a volume renderer with three.js and GLSL.
-  - It renders the CT and segmentation labels together, so the tumor can be highlighted inside the liver.
-  - A moving cutting plane exposes the inside of the volume.
-
-- **Hand tracking**
-  - MediaPipe tracks 21 landmarks on each hand.
-  - A gesture state machine and smoothing help avoid unintended movements.
-  - I also experimented with a small neural network for cases where fingers overlap.
-
-- **Measurements and planning**
-  - Liver remnant volume is calculated from the segmented liver voxels on either side of the cut.
-  - Tumor margin uses a distance transform.
-  - Vessel intersections come from the segmentation masks.
-  - A plane search evaluates 3,751 nearby candidates.
-  - There's also a virtual aortic stent demo with simplified sizing and flow calculations.
-
-- **Voice**
-  - The browser's speech recognition listens for "scrub."
-  - Common requests use a predefined command parser.
-  - An optional LLM helps interpret other phrasing, but can only select supported actions.
-
-# challenges i ran into
-
-- **Gesture controls weren't as intuitive as i expected**
-  - my first version used palm angle to switch between rotating the scan and moving the cutting plane.
-  - It was awkward to hold the right angle consistently.
-  - i changed it to open hand for the cut and pinch for rotation.
-
-- **Fingers overlap all the time**
-  - MediaPipe can misread landmarks when fingers cover each other.
-  - i added filtering and gesture-state logic.
-  - The experimental neural network improved results on synthetic hand data.
-
-- **A webcam isn't a depth camera**
-  - i estimate relative depth from how large the hand looks on screen.
-  - It's enough to move the model around, but it isn't a precise measurement of where your hand is in 3D.
-
-- **CT volumes are big**
-  - Rendering the scan, showing segmented anatomy, and updating planning calculations at the same time required preprocessing and optimization.
-
-# accomplishments that i'm proud of
-
-- i got a real CT volume rendering in the browser with live gesture controls.
-- The planning measurements actually change when the cutting plane moves.
-- i tested the measurement code against independent NumPy calculations.
-- On one test cut, the plane search increased the measured margin from 6.3 mm to 10.2 mm and reduced the intersected segmented vessel components from two to zero. That's a geometric comparison, not evidence that the new cut would be better for a patient.
-- The main viewer, gestures, measurements, and optimizer still work without an LLM.
-
-# what i learned
-
-- A gesture can be easy for a computer to recognize and still be annoying for a person to use.
-- Getting a 3D scan to respond to your hand is one thing. Making it easier to find useful information is a different problem.
-- The most useful role for AI here isn't to give surgical advice. It's to understand what someone is asking for and call the right tools.
-- Real clinical use would require testing with surgeons, better reliability in an operating-room environment, and much more validation of the anatomy and planning calculations.
-
-# running it
-
-Use Chrome on a laptop.
-
-```bash
-npm install
-npm run dev
+```
+Browser (Vite + TS + three.js)
+  ├─ hands, renderer, geometry engine (deterministic, runs every tool call)
+  ├─ agent client ──► /api/agent  (scrub-backend, Nebius Serverless Endpoint, CPU)
+  │                     └─ router: Nano-LoRA endpoint (1.5 s budget) ──► Nemotron 3 Super on Token Factory (6 s budget)
+  ├─ rule cards ───► /api/rules   (Tavily search ──► Super extraction ──► verbatim check)
+  └─ gallery ──────► assets precomputed by the vista3d-full Serverless Job
 ```
 
-Open the local URL shown in the terminal and allow camera and microphone access.
+The model never sees pixels and never computes a number. It picks tools; the browser's engine runs them on the CT and sends results back; the model answers in one sentence; `ground_check` rejects any number not present in this turn's tool results.
 
-- No webcam: drag to rotate, shift-drag to move the plane, scroll to zoom, and click two points to measure.
-- No microphone: the app has keyboard shortcuts.
-- Press `D` to replay a recorded gesture sequence.
-- Press `H` for the gesture tutorial and `I` to upload a CT. Add `?tutorial=0` to the URL to skip the tutorial.
-- Copilot shortcuts: `J` for anatomical relationship, `N` for nearest vessel, `B` to save a plan, `U` to restore it, `Y` to compare, `Backspace` for the previous view, and `Esc` to cancel.
+## The distillation pipeline
 
-To run the tests and benchmark:
+![Distillation pipeline](docs/distillation.svg)
+
+1. **Generate** (`distill/gen_commands.py`): 6,000 surgeon-style requests from templates x paraphrases x slot values, across all 13 tools, single and multi-step, with slang and some requests that should get a clarifying question. Super wrote the paraphrases. Fixed seed. Split: 5,166 train, 578 val, 256 test. With only two cases (liver and aorta), a split by case is not possible, so the test set is held out by phrasing: the last phrasing of each template appears only in test.
+2. **Teach** (`distill/teach.py`): Super solves each train and val request with the Python engine executing its tool calls. 5,744 full traces.
+3. **Verify** (`distill/verify.py`): a trace is kept only if every tool call is schema-valid, the final engine state satisfies the request's goal predicate, and the final text passes `ground_check`. **Kept 4,133 of 5,744 (72.0 %).** Dropped: 1,242 missed the goal, 183 ungrounded text, 176 errors, 10 invalid schema. The engine labels the data, so the training set is verified, not just generated.
+4. **Train** (`distill/job/train.py`, Serverless Job): LoRA r=16, alpha 32, lr 1e-4 on q/k/v/o and up projections of layers 8 to 55, 1 epoch, max length 4,096. 8,850 training turns. Eval loss 0.710 before, 0.252 at the best step (`distill/runs/lora-1025-1456_train_log.json`). 3,846 s on one H100.
+5. **Serve** (`distill/serve/launch.sh`): the adapter merged into the weights, served by vLLM with Nemotron's tool-call parser. vLLM 0.11 could not load a LoRA on this architecture, so merging was the documented fallback.
+6. **Evaluate** (`distill/eval.py`): the same verifier on the 256 test commands, for every model in the table.
+
+`make distill` reruns steps 1 to 3, `make distill-train` step 4, `make eval` step 6.
+
+## Every number has a formula
+
+| Number | Formula |
+|---|---|
+| Future liver remnant (FLR) | kept organ voxels / organ voxels x 100, organ = liver + tumour |
+| Margin | minimum Euclidean distance transform value from the tumour, over kept organ voxels within one voxel diagonal of the plane; 0 if tumour is on the kept side |
+| Vessels crossed | 6-connected vessel components within one voxel diagonal of the plane, inside the organ box, at least 120 mm³ |
+| Tumour volume | tumour voxels x voxel volume, full-resolution labels |
+| Resected volume | organ voxels on the resected side x voxel volume |
+| Neck diameter | mean lumen diameter over the first 15 mm below the stent's proximal end, sampled every 1 mm |
+| Neck length | length below the proximal end where lumen diameter stays within 10 % of the neck mean |
+| Oversize | (device diameter - neck diameter) / neck diameter x 100 |
+| Optimizer | local search of ±20° and ±15 mm around the current cut, then a wide search around the tumour if that is infeasible |
+| Dice | 2 x overlapping voxels / (voxels in A + voxels in B) |
+
+Each `measure` result carries its method string, so the formula travels with the number ([docs/TOOLS.md](docs/TOOLS.md)).
+
+## What is AI and what isn't
+
+| Part | AI? | How |
+|---|---|---|
+| Hand tracking | Yes | MediaPipe hand landmarks, then a 1€ filter and a gesture state machine |
+| Understanding a request | Yes | Nemotron Nano 9B v2 + LoRA, Super on escalation; regex grammar if both fail |
+| Segmentation of a new CT | Yes | VISTA-3D |
+| Reading device rules from IFU pages | Yes | Super extracts; code checks each number against the quoted source text |
+| FLR, margin, vessels, volumes, stent sizing and rules, optimizer | No | Deterministic geometry on the CT voxels, identical in TypeScript and Python (`make parity`, `make tool-parity`) |
+| Any number the agent says | No | It must appear in this turn's tool results, or the sentence is replaced |
+
+## Why it matters
+
+- Severe post-hepatectomy liver failure occurs in about 13 % of patients, with mortality of 21 % or more (Reese et al., HPB, 2025). The remnant volume is what Scrub+ measures for every cut.
+- Manual liver segmentation on CT took more than 34 minutes per scan in a 41-scan study ([Gotra et al., Academic Radiology](https://healthimaging.com/node/70333)). VISTA-3D does it in a median 5.2 s here.
+- Screen-viewing time in the operating room went from 96 % to 10 % (Hansen et al., 2013).
+
+## Privacy and deployment
+
+Every model in Scrub+ has open weights. The runtime agent runs on our own Nebius endpoint, so the architecture can keep patient data inside one cloud account, with no call to a closed model API. Token Factory, the fallback, offers zero-retention inference, and Nebius AI Cloud is HIPAA-capable infrastructure. This describes what the architecture enables. Scrub+ itself has no certification and is not a medical device. CT in the hosted demo comes from public research datasets; an uploaded scan is read in the browser and is not sent anywhere.
+
+## Limits
+
+- Hand depth is estimated from apparent hand size on a 2D webcam, which is enough to move the model and not a precise 3D position.
+- Cuts are planar. Real liver resections follow Couinaud segments and curved surfaces.
+- Stent flow is a 1D particle model, not CFD.
+- IFU rules are simplified to four fields. A field Tavily cannot find verbatim falls back to a default rule, labelled as such.
+- The data is from research datasets (MSD Task03, TotalSegmentator labels), not clinical cases.
+- VISTA-3D weights are under the NVIDIA Open Model License, research use only.
+- Point-prompt segmentation ("what's this?") and the server-side upload Job were cut for time. Uploaded scans are viewed in the browser, and only the gallery is segmented by VISTA-3D.
+- Not a medical device. Not for clinical use.
+
+## What was built during this hackathon
+
+Scrub+ was first built Oct 10 to 11, 2026 (inside the submission period, which opened Aug 26). Everything in the sections from "Results" through "Limits" of this README was added Oct 18 to 30:
+
+- Oct 18 to 19: audit of v1, platform verification ([docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md)), FastAPI backend, first Nemotron 3 Super tool call.
+- Oct 19 to 20: 13 agent tools in TypeScript and Python with parity tests; agent loop; `ground_check` with the HUD counter; command palette; Under the hood drawer.
+- Oct 22: VISTA-3D Serverless Job on H100; 8-scan gallery with Dice.
+- Oct 22 to 25: the distillation pipeline: 6,000 commands, 5,744 teacher traces, engine verification, LoRA Serverless Job, vLLM Serverless Endpoint, eval of five configurations.
+- Oct 25 to 26: Tavily rule cards with verbatim validation, driving stent verdicts.
+- Oct 28: backend as a Serverless Endpoint with rate limits and a daily budget kill switch; closed-model code removed; hosted judge path checked end to end.
+
+The HackNC write-up (inspiration, gestures, challenges) is kept in [docs/README_hacknc.md](docs/README_hacknc.md).
+
+## Setup
+
+Requirements: Node 20+, Python 3.11 with [uv](https://docs.astral.sh/uv/), Chrome. Copy `.env.example` to `.env` and fill in the keys you have.
 
 ```bash
-npm test
-npm run e2e
-npm run bench
+make install     # npm ci, uv sync, secret-scanning pre-commit hook
+make dev         # backend on :8787 and the app on :5173
+make test        # typecheck, lint, vitest, pytest
+make e2e         # Playwright, fails on any console error
+python pipeline/run.py liver --ct ... --labels ... --seg ...   # CT to app assets (see pipeline/run.py)
+make distill     # commands -> teacher traces -> verified SFT files (Token Factory key)
+make distill-train  # LoRA Serverless Job on Nebius
+make eval        # every configured model on the test split -> metrics/results.json
+make results     # rebuild docs/RESULTS.md from metrics/
+make deploy      # backend as a CPU Serverless Endpoint at the pushed commit
 ```
 
-More details are in the [demo script](docs/DEMO_SCRIPT.md), [benchmark notes](docs/BENCHMARK.md), and [clinical notes](docs/CLINICAL.md).
+Without any keys the app still runs: the regex grammar and the engine need no network. Starting and stopping the Nebius endpoints is in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-# built with
+## Licenses and data credits
 
-- TypeScript, Vite, three.js, WebGL / GLSL
-- MediaPipe, Web Speech API
-- Python, NumPy, SciPy, scikit-image, nibabel
-- TotalSegmentator, Medical Segmentation Decathlon
-- Playwright
-- Gemini / Claude for command interpretation
+- Scrub+ code: MIT ([LICENSE](LICENSE)).
+- Medical Segmentation Decathlon (Task03 Liver): CC BY-SA 4.0.
+- TotalSegmentator: code Apache 2.0, data CC BY 4.0.
+- VISTA-3D (`nvidia/NV-Segment-CT`): code Apache 2.0, weights NVIDIA Open Model License, research use only.
+- Nemotron 3 Super, Nemotron 3 Nano, Nemotron Nano 9B v2: NVIDIA Open Model License.
+- Tavily: used under the Tavily Terms of Service; rule cards cite each source URL.
+- MediaPipe: Apache 2.0. three.js: MIT.
 
-# try it out
+Platform feedback for Nebius and NVIDIA: [docs/FEEDBACK.md](docs/FEEDBACK.md).
 
-- [website](https://scrubplus.vercel.app)
+## Team
 
-# data and limitations
-
-The CT data comes from the Medical Segmentation Decathlon, with additional anatomical labels from TotalSegmentator. See [docs/CLINICAL.md](docs/CLINICAL.md) for data sources, licenses, and the limitations of the planning calculations.
+[avidnerd](https://github.com/avidnerd).

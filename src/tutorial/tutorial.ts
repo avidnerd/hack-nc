@@ -238,7 +238,7 @@ export class Tutorial {
     SLIDES.forEach((_, k) => dots.append(el('span', `tut-dot${k < this.i ? ' done' : ''}${k === this.i ? ' on' : ''}`)));
     const nav = el('div', 'tut-nav');
     const back = button('Back', () => this.go(this.i - 1), this.i === 0);
-    const skip = button('Skip tutorial', () => this.close('liver'));
+    const skip = button('Skip, use mouse', () => this.close('liver'));
     nav.append(back, skip);
     if (!last) nav.append(button('Next', () => this.go(this.i + 1), false, true));
     card.append(kicker, title, body, status, alt, dots, nav);

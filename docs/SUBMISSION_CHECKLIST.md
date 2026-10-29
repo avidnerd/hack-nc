@@ -2,31 +2,31 @@
 
 Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal deadline Oct 29, 8:00 PM ET; hard deadline Oct 30, 10:00 AM PT).
 
-- [ ] At least one **NVIDIA open model** used **at runtime** (Nemotron 3 Super, Nemotron Nano 9B v2 + our LoRA, VISTA-3D / NV-Segment-CT, optionally Parakeet)
-  - [x] Nemotron 3 Super called at runtime from the backend (M0; verified 2026-10-22 through the app palette, local backend)
-  - [ ] Nano 9B v2 + LoRA served at runtime (M3)
-    - [x] Trained (run `lora-1025-1456`, H100 Serverless Job), merged, served by vLLM on the `scrub-nano-scrub` Serverless Endpoint, evaluated on 256 held-out commands (2026-10-25)
-    - [ ] Reached by the hosted app through the router (needs the hosted backend, M5)
-  - [ ] VISTA-3D runs at runtime (M2)
-    - [x] Full-scan Serverless Job (H100) segments the 8 gallery scans; Dice in docs/RESULTS.md (2026-10-22)
-- [ ] Runtime use of **Nebius Token Factory** inference API
-- [ ] Runtime use of **Nebius AI Cloud** (Serverless Endpoints + Serverless Jobs)
-- [ ] Hosted **demo URL** works for a judge **without a webcam and without a microphone**
-- [ ] Public repo
+- [x] At least one **NVIDIA open model** used **at runtime** (Nemotron 3 Super, Nemotron Nano 9B v2 + our LoRA, VISTA-3D / NV-Segment-CT, optionally Parakeet)
+  - [x] Nemotron 3 Super called at runtime from the hosted backend (router fallback, rule extraction; verified 2026-10-28 from scrubplus.vercel.app)
+  - [x] Nano 9B v2 + LoRA served at runtime and reached by the hosted app through the router (`scrub`, 573 ms, smoke-prod 2026-10-28)
+  - [x] VISTA-3D: full-scan Serverless Job (H100) segments the 8 gallery scans; Dice in docs/RESULTS.md. Point-prompt endpoint cut (cut order)
+- [x] Runtime use of **Nebius Token Factory** inference API (Super from `/api/agent` and `/api/rules`)
+- [x] Runtime use of **Nebius AI Cloud** (Serverless Endpoints `scrub-backend`, `scrub-nano-scrub`; Serverless Jobs `vista3d-full`, `distill-nano`)
+- [x] Hosted **demo URL** works for a judge **without a webcam and without a microphone** (`scripts/judge-path.mjs`, `metrics/judge_path.json`)
+  - [ ] A friend on a laptop with no webcam completes the 2-minute path cold (human check)
+- [x] Public repo (github.com/avidnerd/hack-nc)
 - [x] **MIT license** file in repo (`LICENSE`, added 2026-10-19)
-- [ ] MIT license visible in the GitHub About sidebar (check after push)
-- [ ] README with setup instructions
-- [ ] README section titled exactly **"NVIDIA models used"**
-- [ ] README section titled exactly **"How Nebius Token Factory and AI Cloud are used"**
-- [ ] YouTube video **under 3:00**, public, shows the project running
+- [ ] MIT license visible in the GitHub About sidebar (check after main is pushed; GitHub detects it from main)
+- [x] README with setup instructions
+- [x] README section titled exactly **"NVIDIA models used"**
+- [x] README section titled exactly **"How Nebius Token Factory and AI Cloud are used"**
+- [ ] YouTube video **under 3:00**, public, shows the project running (script: docs/VIDEO.md)
 - [ ] Track selected: **Best Apps and Agents**
-- [ ] Written note: "Scrub+ was first built Oct 10–11, 2026 (inside the submission period, which opened Aug 26). Everything in sections X–Y of this README was added Oct 18–30." with the list of v2 additions
-- [ ] Platform feedback written (`docs/FEEDBACK.md`) and pasted into the Devpost form
-- [ ] Third-party licenses respected and listed in README:
-  - [ ] MSD (CC BY-SA 4.0)
-  - [ ] TotalSegmentator (Apache 2.0 code / CC BY 4.0 data)
-  - [ ] VISTA-3D (code Apache 2.0, weights NVIDIA Open Model License, research use only)
-  - [ ] Nemotron (NVIDIA Open Model License)
-  - [ ] Tavily ToS (Tavily is used at runtime by `/api/rules`; cards cached in `data/device_rules/`)
-- [ ] No closed-model calls left in the hosted build (Gemini proxy `api/llm.ts` removed or disabled)
-- [ ] No secrets in the repo or client bundle (pre-commit check passes; `grep` of `web-dist/`)
+- [x] Written note in README ("What was built during this hackathon") with the list of v2 additions; paste into Devpost
+- [x] Platform feedback written (`docs/FEEDBACK.md`)
+  - [ ] Pasted into the Devpost form
+- [x] Third-party licenses respected and listed in README:
+  - [x] MSD (CC BY-SA 4.0)
+  - [x] TotalSegmentator (Apache 2.0 code / CC BY 4.0 data)
+  - [x] VISTA-3D (code Apache 2.0, weights NVIDIA Open Model License, research use only)
+  - [x] Nemotron (NVIDIA Open Model License)
+  - [x] Tavily ToS (Tavily is used at runtime by `/api/rules`; cards cached in `data/device_rules/`)
+- [x] No closed-model calls left in the hosted build (`api/llm.ts` deleted, `src/ai/llm.ts` closed; bundle grep for Gemini/Anthropic hosts is empty)
+- [x] No secrets in the repo or client bundle (`scripts/check-secrets.sh --all` passes; build-web greps the bundle)
+- [ ] Devpost: video link, repo, demo URL, feedback, update note; then add the video link to README
