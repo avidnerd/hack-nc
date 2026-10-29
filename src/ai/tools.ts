@@ -105,6 +105,8 @@ export interface ToolHost {
   /** Visibility changed outside dispatch: rebuild the label palette. */
   refreshVisibility(): void;
   syncHud(): void;
+  /** VISTA-3D point prompt at a world-mm point; adds the structure to the case. */
+  segmentPoint(p: Vec3): Promise<Json>;
 }
 
 /* ------------------------------------------------------------ pure helpers */
@@ -770,8 +772,11 @@ export async function executeTool(name: string, args: Json | null | undefined): 
         return resect();
       case 'write_plan':
         return writePlanTool();
-      case 'segment_point':
-        return { error: 'unavailable', reason: 'VISTA-3D point segmentation is not wired yet (M2)' };
+      case 'segment_point': {
+        const p = a.xyz_mm;
+        if (!Array.isArray(p) || p.length !== 3 || !p.every((x) => typeof x === 'number')) return { error: 'xyz_mm must be three numbers' };
+        return await host!.segmentPoint(p as Vec3);
+      }
       case 'lookup_device_rules':
         return await lookupDeviceRules(a);
       default:

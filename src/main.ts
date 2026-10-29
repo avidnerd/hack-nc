@@ -26,7 +26,10 @@ import {
   setAgentAvailable,
   agentLog,
   scansAvailable,
+  pointAvailable,
+  requestSegmentPoint,
 } from './ai/agentClient.ts';
+import { addStructure, voxelAt, type SegmentReply } from './ai/segmentPoint.ts';
 import { executeTool, getState, noteDevice, setToolHost, templateReply, type OptimizeOutcome } from './ai/tools.ts';
 import { findCard } from './devices/deviceRules.ts';
 import {
@@ -220,6 +223,13 @@ async function boot(): Promise<void> {
     },
     pick: (x, y) => pickScreen(x, y),
     frame: () => renderer.frame,
+    segment: (x, y) => {
+      const p = pickScreen(x, y);
+      if (p) void whatsThis(p);
+    },
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    lastPointer = [e.clientX, e.clientY];
   });
 
   // The agent backend is optional: without it every command takes the v1
@@ -360,7 +370,8 @@ async function runCommand(cmd: string, heard: string, source: 'voice' | 'palette
   // verdict in one step, where the model (trained on default rules) stopped
   // after lookup_device_rules.
   const nav = parse();
-  if (nav?.kind === 'loadCase' || (nav?.kind === 'placeStent' && nav.device)) {
+  // "What's this?" too: only the app knows where the pointer is.
+  if (nav?.kind === 'loadCase' || nav?.kind === 'whatsThis' || (nav?.kind === 'placeStent' && nav.device)) {
     dispatchIntent(nav, 'voice');
     return;
   }
@@ -432,7 +443,71 @@ setToolHost({
   writePlan: () => writePlan(),
   refreshVisibility: () => emit('visible', state.visible),
   syncHud: () => hud.syncNumbers(),
+  segmentPoint: (p) => segmentAt(p),
 });
+
+/* ------------------------------------------------ VISTA-3D point prompts */
+
+/** Last pointer position over the canvas: where a typed "what's this?" points. */
+let lastPointer: [number, number] | null = null;
+let vistaCount = 0;
+let vistaBusy = false;
+
+/**
+ * Segment the structure at p (world mm) with VISTA-3D on the vista3d-point
+ * endpoint and add it to the case. Returns what the segment_point tool reports.
+ */
+async function segmentAt(p: Vec3): Promise<Record<string, unknown>> {
+  const data = state.data;
+  if (!data) return { error: 'no case loaded' };
+  if (!pointAvailable()) return { error: 'unavailable', reason: 'segmentation service not configured' };
+  // In-browser uploads and the practice object exist only in this tab, not on Nebius.
+  if (data.meta.id === 'upload' || data.meta.id === 'practice') {
+    return { error: 'unavailable', reason: 'point prompts work on the gallery, demo and Nebius-segmented scans' };
+  }
+  const v = voxelAt(data, p);
+  if (!v) return { error: 'the point is outside the volume' };
+  if (vistaBusy) return { error: 'busy', reason: 'a segmentation is already running' };
+  vistaBusy = true;
+  toast('VISTA-3D · NEBIUS · segmenting', 'info');
+  try {
+    const r = await requestSegmentPoint<SegmentReply>(data.meta.id, v);
+    if (state.data !== data) return { error: 'the case changed' };
+    toast(`VISTA-3D · NEBIUS · ${r.seconds.toFixed(1)} s`, 'good');
+    if (!r.voxels) return { found: false, seconds: r.seconds };
+    const added = await addStructure(data, r, vistaCount + 1);
+    if (!added) {
+      // A structure the case already labels: point at it instead.
+      if (r.guess) dispatchIntent({ kind: 'show', structure: r.guess.key, on: true }, 'voice');
+      return { structure_id: r.guess?.key ?? null, label_guess: r.guess?.name ?? null, volume_ml: r.volume_ml, seconds: r.seconds, existing: true };
+    }
+    vistaCount++;
+    state.visible = { ...state.visible, [added.label.key]: true };
+    renderer.refreshLabels(data);
+    if (added.mesh && renderer.frame) anatomy.addStructure(added.label, added.mesh.positions, added.mesh.indices, renderer.frame, data.meta.kind);
+    emit('visible', state.visible);
+    return { structure_id: added.label.key, name: added.label.name, volume_ml: r.volume_ml, label_guess: r.guess?.name ?? null, seconds: r.seconds };
+  } catch (err) {
+    console.warn('[vista-point]', err);
+    return { error: 'unavailable', reason: 'segmentation service warming up' };
+  } finally {
+    vistaBusy = false;
+  }
+}
+
+/** Alt-click and "what's this?": segment, then say what was found. */
+async function whatsThis(p: Vec3): Promise<void> {
+  const r = await segmentAt(p);
+  if (r.error) {
+    say(r.reason === 'segmentation service warming up' ? 'Segmentation service warming up.' : `Cannot segment here: ${String(r.reason ?? r.error)}.`);
+  } else if (r.found === false) {
+    say('VISTA-3D found no structure at that point.');
+  } else if (r.existing) {
+    say(`That is the ${String(r.label_guess ?? 'labelled structure').toLowerCase()}: ${String(r.volume_ml)} milliliters, VISTA-3D on Nebius.`);
+  } else {
+    say(`${String(r.name)}: ${String(r.volume_ml)} milliliters. Segmented by VISTA-3D on Nebius in ${Number(r.seconds).toFixed(1)} seconds.`);
+  }
+}
 
 /** The temporal gesture network. Optional: the rules work alone without it. */
 async function loadGestureNet(): Promise<void> {
@@ -1509,6 +1584,13 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
 
     case 'loadCase': {
       void switchCase(intent.id);
+      break;
+    }
+
+    case 'whatsThis': {
+      const p = lastPointer ? pickScreen(lastPointer[0], lastPointer[1]) : pickScreen(window.innerWidth / 2, window.innerHeight / 2);
+      if (p) void whatsThis(p);
+      else say('Point at the scan first: alt-click a structure, or cut and alt-click the cut face.');
       break;
     }
 

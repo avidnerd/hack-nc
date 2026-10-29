@@ -73,6 +73,10 @@ function materialFor(key: string, label: LabelDef | undefined, kind: string): TH
       0.35, 2.0,
     );
   }
+  if (key.startsWith('vista_')) {
+    // Found by a VISTA-3D point prompt: the teal, lit a little from within.
+    return new THREE.MeshPhysicalMaterial({ color: c, emissive: 0x0b3a36, roughness: 0.35, clearcoat: 0.6 });
+  }
   if (label?.role === 'vessel') {
     return new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.25, clearcoat: 0.9, clearcoatRoughness: 0.15 });
   }
@@ -284,6 +288,37 @@ export class AnatomyView {
       u.uTumorId.value = tumorId;
       u.uOrganIds.value = organIds;
     }
+  }
+
+  /**
+   * Add one structure found after load (a VISTA-3D point prompt): its surface
+   * in world mm, drawn like the pipeline's meshes and cut by the same plane.
+   */
+  addStructure(label: LabelDef, positionsMm: Float32Array, indices: Uint32Array, f: Frame, kind: string): void {
+    const s = 1 / f.maxExtent;
+    const pos = new Float32Array(positionsMm.length);
+    for (let i = 0; i < pos.length; i += 3) {
+      pos[i] = (positionsMm[i] - f.centerMm[0]) * s;
+      pos[i + 1] = (positionsMm[i + 1] - f.centerMm[1]) * s;
+      pos[i + 2] = (positionsMm[i + 2] - f.centerMm[2]) * s;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    const mat = materialFor(label.key, label, kind);
+    mat.clippingPlanes = [this.keepPlane];
+    mat.clipShadows = false;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = mat.transparent ? 3 : 0;
+    this.group.add(mesh);
+    this.parts.push({
+      entry: { key: label.key, label: label.id, vertexOffset: 0, vertexCount: pos.length / 3, indexOffset: 0, indexCount: indices.length },
+      mesh, lifted: null, baseEmissive: mat.emissive.clone(),
+      base: { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite },
+      ghosted: false,
+    });
   }
 
   dispose(): void {

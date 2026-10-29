@@ -116,3 +116,36 @@ def test_upload_endpoint_is_rate_limited(env, monkeypatch):
     env[0].objects[f"out/{sid}/assets/meta.json"] = b'{"shape":[1,1,1]}'
     r = c.get(f"/api/scans/{sid}/assets/meta.json")
     assert r.status_code == 200 and r.json()["shape"] == [1, 1, 1]
+
+
+def test_segment_point_proxies_with_the_token_and_maps_failures(monkeypatch):
+    import httpx
+
+    seen = {}
+
+    class R:
+        status_code = 200
+
+        def json(self):
+            return {"voxels": 5, "seconds": 0.7}
+
+    def post(url, json, timeout, headers):
+        seen.update(url=url, body=json, headers=headers)
+        return R()
+
+    monkeypatch.setattr(main, "POINT_URL", "https://point.example")
+    monkeypatch.setattr(main, "POINT_KEY", "tok")
+    monkeypatch.setattr(httpx, "post", post)
+    c = TestClient(main.app)
+    r = c.post("/api/segment-point", json={"case_id": "msd_liver_39", "point": [1, 2, 3]})
+    assert r.status_code == 200 and r.json()["voxels"] == 5
+    assert seen["url"] == "https://point.example/segment" and seen["headers"]["authorization"] == "Bearer tok"
+    assert c.post("/api/segment-point", json={"case_id": "../x", "point": [1, 2, 3]}).status_code == 422
+
+    def down(*a, **k):
+        raise httpx.ConnectError("cold")
+
+    monkeypatch.setattr(httpx, "post", down)
+    assert c.post("/api/segment-point", json={"case_id": "liver", "point": [1, 2, 3]}).status_code == 503
+    monkeypatch.setattr(main, "POINT_URL", "")
+    assert c.post("/api/segment-point", json={"case_id": "liver", "point": [1, 2, 3]}).status_code == 503

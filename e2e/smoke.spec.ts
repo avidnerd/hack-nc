@@ -209,6 +209,8 @@ test('upload: a NIfTI CT from disk becomes a viewable case', async ({ page }) =>
 });
 
 test('upload: Segment on Nebius walks the job stages and opens the planned case', async ({ page }) => {
+  // Loads two cases (the upload, then the planned liver) under software WebGL.
+  test.setTimeout(300_000);
   // A backend that can run scans; the "job" goes UPLOADED -> SEGMENTING -> CENTERLINE -> READY
   // and its assets are the shipped liver case.
   await page.route('**/api/health', (r) => r.fulfill({ json: { ok: true, token_factory: false, scans: true } }));
@@ -225,6 +227,8 @@ test('upload: Segment on Nebius walks the job stages and opens the planned case'
   });
   await page.goto('/?hands=off&voice=off&tutorial=0');
   await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
+  // Software WebGL: fewer ray-march steps keep the main thread free for the clicks.
+  await page.evaluate(() => (window.scrub!.renderer.stepsOverride = 16));
   const { makeNifti } = await import('../tests/niftiFixture.ts');
   const ct = makeNifti({ dims: [32, 32, 24], spacing: [1.5, 1.5, 2], value: (i) => (i < 16 ? 40 : -1000) });
   const chooser = page.waitForEvent('filechooser');
@@ -233,7 +237,7 @@ test('upload: Segment on Nebius walks the job stages and opens the planned case'
   const go = page.getByRole('button', { name: 'Segment on Nebius' });
   await expect(go).toBeVisible({ timeout: 15_000 });
   await go.click();
-  await page.waitForFunction((x) => window.scrub!.state.data?.meta.id !== 'upload' && window.scrub!.state.data?.meta.kind === 'liver', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.scrub!.state.data?.meta.id !== 'upload' && window.scrub!.state.data?.meta.kind === 'liver', null, { timeout: 30_000 });
   await expect(page.locator('.scanjob')).toBeHidden();
   expect(await page.evaluate(() => window.scrub!.state.response)).toBe('Scan segmented on Nebius: VISTA-3D took 4.2 seconds. Planning is on.');
 });

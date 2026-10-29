@@ -30,6 +30,8 @@ try {
   await page.goto(base);
   await page.getByRole('button', { name: /^Skip/ }).click({ timeout: 30_000 });
   await page.waitForFunction(() => window.scrub?.state?.data?.meta?.id === 'liver', null, { timeout: 60_000 });
+  // Headless software WebGL: fewer ray-march steps keep the main thread free.
+  if (process.env.JUDGE_HEADED !== '1') await page.evaluate(() => (window.scrub.renderer.stepsOverride = 16));
 
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Upload CT' }).click();

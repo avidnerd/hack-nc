@@ -21,7 +21,7 @@ SECRET=scrub-backend
 
 payload=$(python3 - <<'EOF'
 import json, os
-keys = ["NEBIUS_TF_API_KEY", "TAVILY_API_KEY", "NANO_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+keys = ["NEBIUS_TF_API_KEY", "TAVILY_API_KEY", "NANO_API_KEY", "POINT_API_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
 vals = {k: os.environ[k] for k in keys if os.environ.get(k)}
 # The job-launching service account key (see docs/OPERATIONS.md), if present.
 key = os.environ.get("NEBIUS_SA_KEY_FILE")
@@ -42,6 +42,11 @@ ENVS=(--env "NEBIUS_TF_BASE_URL=$NEBIUS_TF_BASE_URL" --env "NEBIUS_TF_MODEL_SUPE
   --env "ALLOWED_ORIGINS=$ORIGINS")
 [ -n "${NANO_BASE_URL:-}" ] && ENVS+=(--env "NANO_BASE_URL=$NANO_BASE_URL")
 SECRETS=(--env-secret "NEBIUS_TF_API_KEY=$SECRET" --env-secret "TAVILY_API_KEY=$SECRET" --env-secret "NANO_API_KEY=$SECRET")
+# Point prompts: the vista3d-point endpoint (vista/point/launch.sh).
+if [ -n "${POINT_BASE_URL:-}" ]; then
+  ENVS+=(--env "POINT_BASE_URL=$POINT_BASE_URL" --env POINT_RPM=12)
+  SECRETS+=(--env-secret "POINT_API_KEY=$SECRET")
+fi
 # Uploaded scans: bucket keys, and the service account key that starts the vista3d-full job.
 if [ -n "${NEBIUS_SA_KEY_FILE:-}" ] && [ -f "$NEBIUS_SA_KEY_FILE" ]; then
   ENVS+=(--env "VISTA_JOB_PROJECT_ID=$VISTA_JOB_PROJECT_ID" --env "NEBIUS_S3_ENDPOINT=$NEBIUS_S3_ENDPOINT"

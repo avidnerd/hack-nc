@@ -173,6 +173,12 @@ export class VolumeRenderer {
     this.rig.add(this.mesh);
   }
 
+  /** Re-upload the label volume after a structure was added to it in place. */
+  refreshLabels(data: CaseData): void {
+    if (this.labelTex) this.labelTex.needsUpdate = true;
+    this.buildPalette(data);
+  }
+
   dispose(): void {
     if (this.mesh) {
       this.rig.remove(this.mesh);

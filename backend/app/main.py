@@ -35,6 +35,9 @@ budget = guard.Budget(float(os.environ.get("DAILY_BUDGET_USD", "0")))
 # Each upload starts an H100 job: a few per IP per hour, and a cap per day for everyone.
 scans_limit = guard.RateLimiter(int(os.environ.get("SCANS_PER_HOUR", "3")), window_s=3600)
 scans_daily = guard.RateLimiter(int(os.environ.get("SCANS_PER_DAY", "20")), window_s=86400)
+point_limit = guard.RateLimiter(int(os.environ.get("POINT_RPM", "12")))
+POINT_URL = os.environ.get("POINT_BASE_URL", "").rstrip("/")
+POINT_KEY = os.environ.get("POINT_API_KEY", "")
 
 
 def _limit(limiter: guard.RateLimiter, request: Request) -> None:
@@ -72,6 +75,7 @@ def health() -> dict:
         "tools": len(tool_specs()),
         "prompt_version": agent.PROMPT_VERSION,
         "scans": scans.job_config().ready,
+        "segment_point": bool(POINT_URL),
     }
 
 
@@ -164,3 +168,27 @@ def scan_asset(scan_id: str, name: str) -> StreamingResponse:
         raise HTTPException(e.status, str(e)) from e
     kind = "application/json" if name.endswith(".json") else "application/octet-stream"
     return StreamingResponse(iter(lambda: body.read(1 << 20), b""), media_type=kind, headers={"content-length": str(size)})
+
+
+class PointRequest(BaseModel):
+    case_id: str = Field(pattern=r"^[A-Za-z0-9_\-]{1,64}$")
+    point: list[int] = Field(min_length=3, max_length=3)
+
+
+@app.post("/api/segment-point")
+def segment_point(req: PointRequest, request: Request) -> dict:
+    """VISTA-3D point prompt on the vista3d-point endpoint (vista/point/server.py)."""
+    if not POINT_URL:
+        raise HTTPException(503, "segmentation service not configured")
+    _limit(point_limit, request)
+    import httpx
+
+    try:
+        # The first call on a case prepares its volume on the GPU box: allow for it.
+        r = httpx.post(f"{POINT_URL}/segment", json=req.model_dump(), timeout=60,
+                       headers={"authorization": f"Bearer {POINT_KEY}"} if POINT_KEY else {})
+    except httpx.HTTPError as e:  # cold or stopped endpoint: the client says it is warming up
+        raise HTTPException(503, f"segmentation service unavailable: {type(e).__name__}") from e
+    if r.status_code != 200:
+        raise HTTPException(503 if r.status_code >= 500 else r.status_code, f"segmentation service: {r.status_code}")
+    return r.json()

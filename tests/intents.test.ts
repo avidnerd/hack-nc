@@ -259,3 +259,12 @@ describe('narration templates', () => {
     );
   });
 });
+
+describe('what is this', () => {
+  it.each(["what's this", 'What is this?', 'whats that', 'segment this', 'identify that'])('%s is a point prompt', (t) => {
+    expect(parseIntent(t)).toEqual({ kind: 'whatsThis' });
+  });
+  it('a question about a named structure is not', () => {
+    expect(parseIntent("what's this margin")?.kind).not.toBe('whatsThis');
+  });
+});

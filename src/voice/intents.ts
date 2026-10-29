@@ -46,6 +46,8 @@ export type Intent =
   | { kind: 'writePlan' }
   | { kind: 'setThreshold'; name: 'marginMin' | 'remnantMin'; value: number }
   | { kind: 'loadCase'; id: string }
+  /** "What's this?": a VISTA-3D point prompt where the pointer is. */
+  | { kind: 'whatsThis' }
   | { kind: 'nudgeStent'; mm: number }
   | { kind: 'plane'; on: boolean }
   /**
@@ -299,6 +301,7 @@ export function parseIntent(text: string): Intent | null {
   if (/^(confirm|yes|yes,? (replace|overwrite)( it)?|overwrite( it)?|replace it|confirm (save|overwrite|it))$/.test(s)) {
     return { kind: 'confirm' };
   }
+  if (/^(what'?s|what is) (this|that|here)$|^(segment|identify|label) (this|that|here|it)$/.test(s)) return { kind: 'whatsThis' };
   if (/\b(tutorial|practi[cs]e|teach me|how do i use|show me how)\b/.test(s)) return { kind: 'tutorial' };
   if (/\b(compare|comparison|versus|difference between)\b/.test(s)) return { kind: 'comparePlan' };
   // Undo is about the cut first (an optimize, a "do it"); with nothing to

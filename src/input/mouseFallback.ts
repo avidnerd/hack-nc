@@ -7,6 +7,7 @@
  *   right-drag    tilt the cutting plane
  *   scroll        zoom
  *   click x2      drop the two caliper points
+ *   alt + click   "what's this?": VISTA-3D segments the structure there
  */
 
 import { cameraBasis, clamp, normalize, objectToWorld, type Frame } from '../coords.ts';
@@ -21,6 +22,8 @@ export interface MouseHooks {
   /** Un-projects a screen pixel onto the volume, for caliper picks. */
   pick: (x: number, y: number) => Vec3 | null;
   frame: () => Frame | null;
+  /** Alt-click: segment the structure under the pointer. */
+  segment?: (x: number, y: number) => void;
 }
 
 export function installMouse(canvas: HTMLCanvasElement, hooks: MouseHooks): void {
@@ -49,7 +52,9 @@ export function installMouse(canvas: HTMLCanvasElement, hooks: MouseHooks): void
     canvas.releasePointerCapture(e.pointerId);
 
     // A press that barely moved is a click, so use it as a caliper pick.
-    if (moved < 5 && e.button === 0) {
+    if (moved < 5 && e.button === 0 && e.altKey && hooks.segment) {
+      hooks.segment(e.clientX, e.clientY);
+    } else if (moved < 5 && e.button === 0) {
       const p = hooks.pick(e.clientX, e.clientY);
       if (p) addCaliperPoint(p);
     }

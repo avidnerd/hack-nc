@@ -124,20 +124,36 @@ export async function askAgent(
 
 let available = false;
 let scans = false;
+let point = false;
 let coolUntil = 0;
 
 /** Ask the backend whether it can serve the agent. Call once at boot. */
 export async function probeAgent(): Promise<boolean> {
   if (!BACKEND_CONFIGURED) return (available = false);
-  const h = await getJson<{ ok?: boolean; token_factory?: boolean; scans?: boolean }>(apiUrl('health'));
+  const h = await getJson<{ ok?: boolean; token_factory?: boolean; scans?: boolean; segment_point?: boolean }>(apiUrl('health'));
   available = !!h?.ok && h.token_factory !== false;
   scans = !!h?.ok && !!h.scans;
+  point = !!h?.ok && !!h.segment_point;
   return available;
 }
 
 /** Whether the backend can start a VISTA-3D job for an uploaded scan. */
 export function scansAvailable(): boolean {
   return scans;
+}
+
+/** Whether the backend has a VISTA-3D point-prompt endpoint behind it. */
+export function pointAvailable(): boolean {
+  return point;
+}
+
+/**
+ * VISTA-3D point prompt (backend /api/segment-point -> vista3d-point endpoint).
+ * Throws with the HTTP status on failure: 503 means the GPU is cold or off.
+ */
+export async function requestSegmentPoint<T>(caseId: string, voxel: [number, number, number]): Promise<T> {
+  // The first prompt on a case prepares its volume on the GPU box.
+  return postJson<T>(apiUrl('segment-point'), { case_id: caseId, point: voxel }, 65_000);
 }
 
 export function agentAvailable(): boolean {
