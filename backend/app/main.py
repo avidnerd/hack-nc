@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import FastAPI, HTTPException
+import os
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from . import agent, config, ground, rules
+from . import agent, config, ground, guard, rules
 from .engine import device_rules
 from .tools import tool_specs
 
@@ -21,6 +23,18 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["content-type"],
 )
+
+
+# Per-IP requests per minute, and Token Factory dollars per UTC day (0: none).
+agent_limit = guard.RateLimiter(int(os.environ.get("AGENT_RPM", "30")))
+rules_limit = guard.RateLimiter(int(os.environ.get("RULES_RPM", "3")))
+budget = guard.Budget(float(os.environ.get("DAILY_BUDGET_USD", "0")))
+
+
+def _limit(limiter: guard.RateLimiter, request: Request) -> None:
+    ip = guard.client_ip(dict(request.headers), request.client.host if request.client else None)
+    if not limiter.allow(ip):
+        raise HTTPException(429, "rate limited")
 
 
 @lru_cache(maxsize=1)
@@ -55,9 +69,13 @@ def health() -> dict:
 
 
 @app.post("/api/agent")
-def run_agent(req: AgentRequest) -> dict:
+def run_agent(req: AgentRequest, request: Request) -> dict:
     if not settings.tf_api_key or not settings.model_super:
         raise HTTPException(503, "Token Factory not configured (NEBIUS_TF_API_KEY, NEBIUS_TF_MODEL_SUPER)")
+    _limit(agent_limit, request)
+    # Over budget, the client falls back to the regex grammar, as on any 503.
+    if budget.exhausted():
+        raise HTTPException(503, "daily budget reached")
     try:
         nano = nano_client()
         result = agent.route_turn(
@@ -69,6 +87,8 @@ def run_agent(req: AgentRequest) -> dict:
         agent.log_request(settings, req.text, None, error=type(e).__name__)
         raise HTTPException(502, f"agent failed: {type(e).__name__}") from e
     agent.log_request(settings, req.text, result)
+    if result.model == settings.model_super:
+        budget.charge(result.prompt_tokens, result.completion_tokens)
     return result.to_json()
 
 
@@ -78,7 +98,7 @@ def grounding() -> dict:
 
 
 @app.get("/api/rules")
-def device_rules_card(device: str) -> dict:
+def device_rules_card(device: str, request: Request) -> dict:
     """A device's rule card: the committed one, else a live Tavily + Super lookup (cached to data/device_rules/)."""
     device = device.strip()[:120]
     if not device:
@@ -86,7 +106,12 @@ def device_rules_card(device: str) -> dict:
     card = device_rules.find(device)
     if card is not None:
         return card
+    _limit(rules_limit, request)
+    if budget.exhausted():
+        raise HTTPException(503, "daily budget reached")
     try:
-        return rules.lookup(device, settings)
+        card = rules.lookup(device, settings)
     except Exception as e:  # Tavily or Token Factory down: the client keeps the default rules
         raise HTTPException(502, f"rule lookup failed: {type(e).__name__}") from e
+    budget.charge(card["usage"]["prompt_tokens"], card["usage"]["completion_tokens"])
+    return card
