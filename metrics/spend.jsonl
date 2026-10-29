@@ -23,3 +23,5 @@
 {"ts":"2026-10-29T19:29:24Z","kind":"job","name":"vista3d-upload_093b10737d3d (liver_30 CT; browser run interrupted by a dev-server reload, job completed)","id":"aijob-e00afhc49wbjjvypw2","gpu":"H100 80GB","gpus":1,"container_s":70,"note":"created 19:23:32Z, started 19:28:14Z, finished 19:29:24Z"}
 {"ts":"2026-10-29T19:46:36Z","kind":"job","name":"vista3d-upload_136306b6181c (liver_30 CT, scripts/upload-path.mjs headed, passed)","id":"aijob-e00aa3b8f7hh6b4bcb","gpu":"H100 80GB","gpus":1,"container_s":67,"note":"created 19:40:52Z, started 19:45:29Z, finished 19:46:36Z"}
 {"ts":"2026-10-29T20:02:59Z","kind":"endpoint","name":"scrub-backend-1029 (created at dbb6801: point prompts)","id":"aiendpoint-e07cyvp3zrsh6wj7h0","gpu":null,"cpu":"cpu-d3 2vcpu-8gb","note":"eu-south1"}
+{"ts":"2026-10-29T20:16:11Z","kind":"endpoint","name":"vista3d-point (stopped after production checks)","id":"aiendpoint-e00wtmh8t3jx0awzzc","gpu":"H100 80GB","gpus":1,"note":"restarted 19:36Z"}
+{"ts":"2026-10-29T20:16:11Z","kind":"endpoint","name":"scrub-backend (old, stopped; replaced by scrub-backend-1029)","id":"aiendpoint-e07ca70g7h017hbs4s","gpu":null}

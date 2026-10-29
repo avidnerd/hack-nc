@@ -1,16 +1,16 @@
 {
-  "base": "http://localhost:5173/",
-  "at": "2026-10-29T19:49:38.645Z",
+  "base": "https://scrubplus.vercel.app/app/",
+  "at": "2026-10-29T20:11:29.511Z",
   "steps": [
     {
-      "label": "alt-click the liver",
+      "label": "alt-click the centre of the screen",
       "reply": "That is the aorta: 80.7 milliliters, VISTA-3D on Nebius.",
-      "ms": 2608
+      "ms": 3015
     },
     {
       "label": "what is this at voxel 170,230,60",
-      "reply": "Stomach, VISTA-3D: 106.2 milliliters. Segmented by VISTA-3D on Nebius in 0.6 seconds.",
-      "ms": 2730
+      "reply": "Stomach, VISTA-3D: 106.2 milliliters. Segmented by VISTA-3D on Nebius in 0.8 seconds.",
+      "ms": 3060
     },
     {
       "label": "new structures",
