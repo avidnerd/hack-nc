@@ -37,3 +37,4 @@ distill/data/eval_*.jsonl
 # Gallery assets (vista/gallery.py); hosted from VITE_GALLERY_URL
 public/data/gallery/
 distill/data/archive/
+.env*.local

@@ -6,9 +6,10 @@
  *
  * The app is built with every API key blanked: a VITE_* variable ends up in
  * public JavaScript, so a key in .env.local must never reach this build.
- * The LLM runs through api/llm.ts instead, which reads GEMINI_KEY from the
- * Vercel environment; without it the app falls back to regex intents and
- * template sentences as §2 requires. Binary case data is gzipped (the loader inflates
+ * The agent runs on our backend (a Nebius Serverless Endpoint, backend/deploy.sh),
+ * named by VITE_AGENT_URL; no closed model is called from the hosted build.
+ * Without the backend the app falls back to regex intents and template
+ * sentences. Binary case data is gzipped (the loader inflates
  * it when VITE_DATA_GZ=1), and the service worker gets a fresh cache id.
  */
 
@@ -26,10 +27,15 @@ const run = (cmd, env = {}) => execSync(cmd, { cwd: root, stdio: 'inherit', env:
 
 rmSync(out, { recursive: true, force: true });
 
+// DECISION: the hosted backend URL is public, so its default lives here and a
+// Vercel build from git needs no environment setup. AGENT_URL overrides it.
+const AGENT_URL = process.env.AGENT_URL ?? 'https://port8000-kkda5hbszzy2k3q.tunnel.applications.eu-south1.nebius.cloud/api/agent';
+
 // Variables already in the environment beat .env files in Vite, so these
 // empty values win over anything in .env.local.
 run(`npx tsc --noEmit && npx vite build --base=/app/ --outDir "${appOut}" --emptyOutDir`, {
-  VITE_LLM: 'proxy',
+  VITE_LLM: 'off',
+  VITE_AGENT_URL: AGENT_URL,
   VITE_GEMINI_KEY: '',
   VITE_ANTHROPIC_KEY: '',
   VITE_ELEVENLABS_KEY: '',
@@ -46,6 +52,7 @@ let raw = 0;
 let packed = 0;
 const dataDir = join(appOut, 'data');
 for (const id of readdirSync(dataDir)) {
+  if (!statSync(join(dataDir, id)).isDirectory()) continue;
   for (const f of readdirSync(join(dataDir, id))) {
     if (!/\.(u8|bin)$/.test(f)) continue;
     const p = join(dataDir, id, f);

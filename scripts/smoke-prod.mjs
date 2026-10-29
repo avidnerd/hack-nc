@@ -4,8 +4,8 @@
  *   node scripts/smoke-prod.mjs [baseUrl]
  *
  * Loads the landing site and the app, boots both cases from the gzipped
- * data, runs copilot commands, the tutorial and a NIfTI upload, calls the LLM
- * proxy, and fails on any page error, console error or failed request.
+ * data, runs copilot commands, the tutorial and a NIfTI upload, calls the agent
+ * backend, and fails on any page error, console error or failed request.
  * Exit code 0 only when every check passed.
  */
 
@@ -26,7 +26,7 @@ page.on('console', (m) => {
   if (m.type() === 'error' && !/GL Driver|GPU stall/.test(m.text())) problems.push(`console: ${m.text().slice(0, 200)}`);
 });
 page.on('response', (r) => {
-  if (r.status() >= 400 && !r.url().includes('/api/llm')) problems.push(`${r.status()} ${r.url()}`);
+  if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`);
 });
 
 const results = [];
@@ -105,13 +105,10 @@ await check('measure, suggest, outcomes', async () => {
   return m;
 });
 
-await check('LLM proxy answers or reports it is unconfigured', async () => {
-  const r = await page.evaluate(async () => {
-    const res = await fetch('/api/llm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system: 'Reply with the single word ok.', user: 'ping' }) });
-    return { status: res.status, body: (await res.text()).slice(0, 120) };
-  });
-  if (r.status !== 200 && r.status !== 503) throw new Error(`${r.status} ${r.body}`);
-  return `${r.status} ${r.body}`;
+await check('agent answers through the hosted backend (Nemotron on Nebius)', async () => {
+  const r = await page.evaluate(() => window.scrub.agent('measure the future liver remnant'));
+  if (!r || !r.valid || !r.tool_calls.length) throw new Error(JSON.stringify(r).slice(0, 200));
+  return `${r.model} ${r.latency_ms} ms ${r.tool_calls.map((c) => c.name).join(',')}${r.escalated ? ' (escalated)' : ''}`;
 });
 
 await check('aorta case: stent seals below the renals', async () => {
