@@ -4,7 +4,7 @@ Four Nebius resources serve the hosted demo, and one Serverless Job runs per upl
 
 | Resource | ID | Region | Cost when running | Needed for |
 |---|---|---|---|---|
-| `scrub-backend` (FastAPI router) | `aiendpoint-e07ca70g7h017hbs4s` | eu-south1 (`project-e07gy4etma00qzp4yapzqb`) | cpu-d3, 2 vCPU | Every agent call from the hosted app |
+| `scrub-backend` (FastAPI router) | `aiendpoint-e07cyvp3zrsh6wj7h0` | eu-south1 (`project-e07gy4etma00qzp4yapzqb`) | cpu-d3, 2 vCPU | Every agent call from the hosted app |
 | `scrub-nano-scrub` (vLLM, Nano 9B v2 + LoRA) | `aiendpoint-e00wgg4g34x43z1mcc` | eu-north1 | 1x H100, about $4.50 per hour | The router's fast path |
 | `scrub-nano-base` (vLLM, base 9B) | `aiendpoint-e00drkq0b76g6b5d2w` | eu-north1 | 1x H100 | Eval only; keep stopped |
 | `vista3d-point` (VISTA-3D point prompts, `vista/point/`) | `aiendpoint-e00wtmh8t3jx0awzzc` | eu-north1 | 1x H100, about $4.50 per hour | Alt-click and "what's this?" |
@@ -17,7 +17,7 @@ nebius ai endpoint list                                   # eu-north1 (default p
 nebius ai endpoint list --parent-id project-e07gy4etma00qzp4yapzqb   # eu-south1
 nebius ai endpoint start --id aiendpoint-e00wgg4g34x43z1mcc   # Nano: about 18 to 25 min until /v1/models answers
 nebius ai endpoint stop  --id aiendpoint-e00wgg4g34x43z1mcc
-nebius ai endpoint start --id aiendpoint-e07ca70g7h017hbs4s   # backend: about 4 min (downloads the pinned commit, pip install)
+nebius ai endpoint start --id aiendpoint-e07cyvp3zrsh6wj7h0   # backend: about 4 min (downloads the pinned commit, pip install)
 nebius ai endpoint start --id aiendpoint-e00wtmh8t3jx0awzzc   # vista3d-point: image pull, pip install, model load
 nebius ai endpoint stop  --id aiendpoint-e00wtmh8t3jx0awzzc
 bash vista/point/launch.sh                                # a new vista3d-point endpoint; writes POINT_BASE_URL to .env

@@ -29,7 +29,7 @@ rmSync(out, { recursive: true, force: true });
 
 // DECISION: the hosted backend URL is public, so its default lives here and a
 // Vercel build from git needs no environment setup. AGENT_URL overrides it.
-const AGENT_URL = process.env.AGENT_URL ?? 'https://port8000-kkda5hbszzy2k3q.tunnel.applications.eu-south1.nebius.cloud/api/agent';
+const AGENT_URL = process.env.AGENT_URL ?? 'https://port8000-wcaj5bqvgfy0ncd.tunnel.applications.eu-south1.nebius.cloud/api/agent';
 
 // Variables already in the environment beat .env files in Vite, so these
 // empty values win over anything in .env.local.
