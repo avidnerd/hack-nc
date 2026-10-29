@@ -7,6 +7,7 @@ returned by Token Factory's GET /v1/models (see docs/PLATFORM_NOTES.md).
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,5 +45,5 @@ def load() -> Settings:
         nano_model=os.environ.get("NANO_ROUTER_MODEL", "scrub"),
         nano_timeout_s=float(os.environ.get("NANO_TIMEOUT_S", "1.5")),
         metrics_dir=Path(os.environ.get("METRICS_DIR", str(REPO / "metrics"))),
-        allowed_origins=[o for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o],
+        allowed_origins=[o for o in re.split(r"[,\s]+", os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173")) if o],
     )

@@ -1,5 +1,5 @@
 # Scrub+ v2. `make help` lists targets.
-.PHONY: results distill-train vista-smoke vista-gallery help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
+.PHONY: deploy results distill-train vista-smoke vista-gallery help install dev backend web test test-web test-backend e2e secrets frametime tf-check parity tool-parity commands distill distill-check eval
 
 help:
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -74,3 +74,6 @@ distill-train: ## LoRA fine-tune Nano 9B v2 on the verified traces (Nebius Serve
 
 results: ## Rebuild docs/RESULTS.md from metrics/ (agent table + VISTA-3D table)
 	{ printf '# Results\n\nEvery number here comes from a file in `metrics/`. Unmeasured cells show `—`.\n\n'; python3 distill/report.py; python3 vista/report.py; } > docs/RESULTS.md
+
+deploy: ## Deploy the backend as a CPU Nebius Serverless Endpoint (eu-south1) at the pushed HEAD
+	bash backend/deploy.sh
