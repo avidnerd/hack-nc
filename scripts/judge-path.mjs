@@ -14,7 +14,8 @@ import { writeFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
 const base = (process.argv[2] ?? 'https://scrubplus.vercel.app').replace(/\/$/, '');
-const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist'] });
+// JUDGE_HEADED=1: a visible window with the real GPU, closer to a judge's laptop than headless software GL.
+const browser = await chromium.launch({ headless: process.env.JUDGE_HEADED !== '1', args: ['--ignore-gpu-blocklist'] });
 // No camera or microphone permission: getUserMedia is denied, as on a judge's locked-down laptop.
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
