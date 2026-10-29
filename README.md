@@ -20,7 +20,9 @@ Scrub+ v1 won 1st place overall at HackNC 2026. This README covers v2, built for
 4. Type `open the aorta case`, then `size a stent for a Gore Excluder`. The rule card shows the IFU limits Tavily found, with source links, and the verdict uses them.
 5. Type `write the plan`. Click **Under the hood** to see every agent call: model, latency, tools, grounded.
 
-Mouse: drag to rotate, shift-drag to move the cut plane, scroll to zoom, click two points to measure. `?` lists the keyboard shortcuts.
+Mouse: drag to rotate, shift-drag to move the cut plane, scroll to zoom, click two points to measure, **alt-click to ask VISTA-3D "what's this?"** (on the cut face, it segments whatever the cut passes through). `?` lists the keyboard shortcuts.
+
+**Your own scan:** click **Upload CT** and choose a `.nii.gz`. It opens in the browser first. If it has no labels, **Segment on Nebius** sends it to a VISTA-3D Serverless Job and shows the job's real stages (UPLOADED, SEGMENTING, CENTERLINE, READY) until the planned case opens.
 
 This path runs cold against production in our scripted check (`node scripts/judge-path.mjs`, results in `metrics/judge_path.json`).
 
@@ -58,6 +60,17 @@ Source: `metrics/results.json`.
 
 Source: `metrics/vista_runs.jsonl`. **Dice** is the overlap between two masks, 2|A∩B| / (|A|+|B|), from 0 (no overlap) to 1 (identical). Lesions under about 1 mL are labelled as liver, so their tumour Dice is 0. VISTA-3D's training data includes MSD Task03, so these scans may have been seen in training.
 
+### VISTA-3D at runtime: point prompts and uploads
+
+| | Value | Source |
+|---|---|---|
+| Point prompt, VISTA-3D inference (H100, warm) | 0.72 s | `metrics/vista_point.jsonl` |
+| Point prompt, round trip from a laptop to the endpoint | 2.0 s | `metrics/vista_point.jsonl` |
+| First prompt on a case (prepares the volume) | 3.5 s on the endpoint | `metrics/vista_point.jsonl` |
+| Prompt inside the liver: VISTA-3D's mask vs the case's liver label | 91.2 % of the mask is liver | `metrics/vista_point.jsonl` |
+| Upload to READY, one 64 MB CT | 338 s: 4 min 39 s waiting for a GPU and the image, 65 s running | `metrics/spend.jsonl` |
+| Of which VISTA-3D inference | 4.2 s | `metrics/spend.jsonl`, job `status.json` |
+
 ### Device rules from Tavily
 
 The Gore Excluder card, extracted from goremedical.com and checked word for word against the source text: neck length ≥ 15 mm, neck diameter 19 to 32 mm, angulation ≤ 60°. Source: `data/device_rules/gore-excluder.json`. On the aorta case the neck measures 18.6 mm, so the Excluder is rejected on neck diameter, and the Excluder Conformable (16 to 32 mm) seals.
@@ -69,7 +82,7 @@ The Gore Excluder card, extracted from goremedical.com and checked word for word
 | Nemotron 3 Super | `nvidia/nemotron-3-super-120b-a12b` | Teacher for the distillation data (paraphrases and 5,744 tool-calling traces); runtime fallback in the router; extracts IFU rules from Tavily results | Nebius Token Factory |
 | Nemotron Nano 9B v2 + our LoRA | base `nvidia/NVIDIA-Nemotron-Nano-9B-v2`, served as `scrub` | The runtime agent: turns a request into tool calls, then a one-line grounded answer | Nebius AI Cloud Serverless Endpoint (vLLM 0.11, 1x H100) |
 | Nemotron 3 Nano 30B A3B | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Few-shot baseline in the results table | Nebius Token Factory |
-| VISTA-3D | `nvidia/NV-Segment-CT` | Segments liver, tumour, vessels, aorta and kidneys on every gallery CT | Nebius AI Cloud Serverless Job (1x H100) |
+| VISTA-3D | `nvidia/NV-Segment-CT` | Segments liver, tumour, vessels, aorta and kidneys on every gallery CT and on uploaded scans; answers "what's this?" point prompts and names what it found | Nebius AI Cloud Serverless Job and Serverless Endpoint (1x H100 each) |
 
 Model IDs were read from Token Factory's `GET /v1/models` (`metrics/tf_models.json`), not typed from memory.
 
@@ -79,7 +92,8 @@ Model IDs were read from Token Factory's `GET /v1/models` (`metrics/tf_models.js
 |---|---|---|---|
 | Token Factory | Nemotron 3 Super, OpenAI-compatible API | A 120B teacher and fallback with native tool calling, paid per token, no GPUs to manage | Managed |
 | AI Cloud Serverless Job | `distill-nano`: LoRA fine-tune of Nano 9B v2 (`distill/job/`) | A one-off GPU run that stops by itself. Token Factory fine-tuning does not list Nemotron models | 1x H100 SXM, 64 min of training |
-| AI Cloud Serverless Job | `vista3d-full`: segmentation and post-processing of the gallery (`vista/job/`) | Batch work on many scans, billed only while it runs | 1x H100 SXM |
+| AI Cloud Serverless Job | `vista3d-full`: segmentation and post-processing of the gallery and of each uploaded scan (`vista/job/`), started by the backend's `/api/scans` | Batch work on many scans, billed only while it runs | 1x H100 SXM |
+| AI Cloud Serverless Endpoint | `vista3d-point`: VISTA-3D point prompts (`vista/point/`), behind the backend's `/api/segment-point` | Interactive: the model stays loaded, so a prompt answers in about 2 s; can be stopped when idle | 1x H100 SXM, eu-north1 |
 | AI Cloud Serverless Endpoint | `scrub-nano-scrub`: vLLM serving the merged LoRA | Our own weights behind an OpenAI-compatible URL with a bearer token; can be stopped when idle | 1x H100 SXM, eu-north1 |
 | AI Cloud Serverless Endpoint | `scrub-backend`: the FastAPI agent router (`backend/`) | A small always-on API next to the models; keys come from SecretStash | cpu-d3, 2 vCPU, eu-south1 |
 
@@ -95,6 +109,8 @@ Browser (Vite + TS + three.js)
   ├─ agent client ──► /api/agent  (scrub-backend, Nebius Serverless Endpoint, CPU)
   │                     └─ router: Nano-LoRA endpoint (1.5 s budget) ──► Nemotron 3 Super on Token Factory (6 s budget)
   ├─ rule cards ───► /api/rules   (Tavily search ──► Super extraction ──► verbatim check)
+  ├─ upload ───────► /api/scans   (bucket ──► vista3d-full Serverless Job ──► planned case)
+  ├─ alt-click ────► /api/segment-point (vista3d-point Serverless Endpoint, VISTA-3D point prompt)
   └─ gallery ──────► assets precomputed by the vista3d-full Serverless Job
 ```
 
@@ -137,6 +153,7 @@ Each `measure` result carries its method string, so the formula travels with the
 | Hand tracking | Yes | MediaPipe hand landmarks, then a 1€ filter and a gesture state machine |
 | Understanding a request | Yes | Nemotron Nano 9B v2 + LoRA, Super on escalation; regex grammar if both fail |
 | Segmentation of a new CT | Yes | VISTA-3D |
+| "What's this?" | Yes | VISTA-3D point prompt; its volume in mL is counted from the returned voxels |
 | Reading device rules from IFU pages | Yes | Super extracts; code checks each number against the quoted source text |
 | FLR, margin, vessels, volumes, stent sizing and rules, optimizer | No | Deterministic geometry on the CT voxels, identical in TypeScript and Python (`make parity`, `make tool-parity`) |
 | Any number the agent says | No | It must appear in this turn's tool results, or the sentence is replaced |
@@ -149,7 +166,7 @@ Each `measure` result carries its method string, so the formula travels with the
 
 ## Privacy and deployment
 
-Every model in Scrub+ has open weights. The runtime agent runs on our own Nebius endpoint, so the architecture can keep patient data inside one cloud account, with no call to a closed model API. Token Factory, the fallback, offers zero-retention inference, and Nebius AI Cloud is HIPAA-capable infrastructure. This describes what the architecture enables. Scrub+ itself has no certification and is not a medical device. CT in the hosted demo comes from public research datasets; an uploaded scan is read in the browser and is not sent anywhere.
+Every model in Scrub+ has open weights. The runtime agent runs on our own Nebius endpoint, so the architecture can keep patient data inside one cloud account, with no call to a closed model API. Token Factory, the fallback, offers zero-retention inference, and Nebius AI Cloud is HIPAA-capable infrastructure. This describes what the architecture enables. Scrub+ itself has no certification and is not a medical device. CT in the hosted demo comes from public research datasets. An uploaded scan is read in the browser and stays there unless the user clicks **Segment on Nebius**; then it goes to the project's Nebius bucket and a VISTA-3D job, never to a closed model.
 
 ## Limits
 
@@ -159,7 +176,8 @@ Every model in Scrub+ has open weights. The runtime agent runs on our own Nebius
 - IFU rules are simplified to four fields. A field Tavily cannot find verbatim falls back to a default rule, labelled as such.
 - The data is from research datasets (MSD Task03, TotalSegmentator labels), not clinical cases.
 - VISTA-3D weights are under the NVIDIA Open Model License, research use only.
-- Point-prompt segmentation ("what's this?") and the server-side upload Job were cut for time. Uploaded scans are viewed in the browser, and only the gallery is segmented by VISTA-3D.
+- "What's this?" works with the mouse (alt-click) and the palette; the pointing-finger gesture from the plan is not built. A prompt works on the gallery, the demo cases and Nebius-segmented uploads, not on a scan opened only in the browser.
+- An upload waits for a GPU: most of the 338 s we measured was provisioning and pulling the image, not segmentation.
 - Not a medical device. Not for clinical use.
 
 ## What was built during this hackathon
@@ -172,6 +190,7 @@ Scrub+ was first built Oct 10 to 11, 2026 (inside the submission period, which o
 - Oct 22 to 25: the distillation pipeline: 6,000 commands, 5,744 teacher traces, engine verification, LoRA Serverless Job, vLLM Serverless Endpoint, eval of five configurations.
 - Oct 25 to 26: Tavily rule cards with verbatim validation, driving stent verdicts.
 - Oct 28: backend as a Serverless Endpoint with rate limits and a daily budget kill switch; closed-model code removed; hosted judge path checked end to end.
+- Oct 29: uploads segmented on Nebius (`/api/scans`, a VISTA-3D job per scan, real progress stages); "what's this?" point prompts on a VISTA-3D Serverless Endpoint.
 
 The HackNC write-up (inspiration, gestures, challenges) is kept in [docs/README_hacknc.md](docs/README_hacknc.md).
 

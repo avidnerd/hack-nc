@@ -1778,6 +1778,8 @@ declare global {
       tool: typeof executeTool;
       /** The "Under the hood" entries: one per agent round. */
       agentLog: typeof agentLog;
+      /** "What's this?" at a world-mm point (scripts/point-path.mjs). */
+      whatsThis: typeof whatsThis;
       /** Force the agent path on or off (tests with a mocked backend). */
       setAgent: typeof setAgentAvailable;
       /** Send a typed request down the palette path. */
@@ -1789,6 +1791,7 @@ declare global {
 }
 window.scrub = {
   state,
+  whatsThis,
   renderer,
   dispatch: dispatchIntent,
   bench,

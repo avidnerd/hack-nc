@@ -209,10 +209,8 @@ test('upload: a NIfTI CT from disk becomes a viewable case', async ({ page }) =>
 });
 
 test('upload: Segment on Nebius walks the job stages and opens the planned case', async ({ page }) => {
-  // Loads two cases (the upload, then the planned liver) under software WebGL.
-  test.setTimeout(300_000);
-  // A backend that can run scans; the "job" goes UPLOADED -> SEGMENTING -> CENTERLINE -> READY
-  // and its assets are the shipped liver case.
+  // A backend that can run scans; the "job" goes UPLOADED -> SEGMENTING -> CENTERLINE -> READY,
+  // and its assets are a tiny planned case (a liver ball with a tumour), so the test stays light.
   await page.route('**/api/health', (r) => r.fulfill({ json: { ok: true, token_factory: false, scans: true } }));
   const id = 'upload_0123456789ab';
   await page.route('**/api/scans', (r) => r.fulfill({ json: { id, stage: 'UPLOADED', job_id: 'aijob-x' } }));
@@ -221,10 +219,32 @@ test('upload: Segment on Nebius walks the job stages and opens the planned case'
     const stage = seq.shift() ?? 'READY';
     return r.fulfill({ json: { id, stage, job_state: 'RUNNING', stages: stage === 'READY' ? { segmenting: 4.2, centerline: 16.4 } : {}, gpu: 'NVIDIA H100 80GB HBM3' } });
   });
-  await page.route(`**/api/scans/${id}/assets/*`, async (r) => {
-    const name = r.request().url().split('/').pop()!;
-    return r.fulfill({ response: await page.request.get(`/data/liver/${name}`) });
-  });
+  const [nx, ny, nz] = [32, 32, 24];
+  const volume = Buffer.alloc(nx * ny * nz, 60);
+  const labels = Buffer.alloc(nx * ny * nz, 0);
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const r2 = (x - 16) ** 2 + (y - 16) ** 2 + ((z - 12) * 1.3) ** 2;
+    labels[x + nx * (y + ny * z)] = r2 < 9 ? 2 : r2 < 120 ? 1 : 0;
+  }
+  const meta = {
+    id, name: 'Uploaded scan', kind: 'liver', shape: [nx, ny, nz], spacing: [2, 2, 2], origin: [0, 0, 0],
+    huRange: [-1000, 2000], huCurve: [[0, -1000], [40, -200], [215, 300], [255, 2000]],
+    labels: [
+      { id: 1, key: 'liver', name: 'Liver', color: [0.6, 0.23, 0.17], role: 'organ' },
+      { id: 2, key: 'tumor', name: 'Tumour', color: [1, 0.42, 0.23], role: 'tumor' },
+    ],
+    vesselIds: [], windowPresets: { soft: { w: 400, l: 40 }, bone: { w: 1800, l: 400 }, lung: { w: 1500, l: -600 }, liver: { w: 150, l: 30 } },
+    defaultPreset: 'soft',
+  };
+  const assets: Record<string, { body: Buffer | string; contentType: string }> = {
+    'meta.json': { body: JSON.stringify(meta), contentType: 'application/json' },
+    'volume.u8': { body: volume, contentType: 'application/octet-stream' },
+    'labels.u8': { body: labels, contentType: 'application/octet-stream' },
+    'meshes.json': { body: JSON.stringify({ positionsBytes: 0, meshes: [] }), contentType: 'application/json' },
+    'meshes.bin': { body: Buffer.alloc(0), contentType: 'application/octet-stream' },
+  };
+  await page.route(`**/api/scans/${id}/assets/*`, (r) => r.fulfill({ status: 200, ...assets[r.request().url().split('/').pop()!] }));
+
   await page.goto('/?hands=off&voice=off&tutorial=0');
   await page.waitForFunction(() => window.scrub?.state.phase === 'ready');
   // Software WebGL: fewer ray-march steps keep the main thread free for the clicks.
@@ -237,7 +257,7 @@ test('upload: Segment on Nebius walks the job stages and opens the planned case'
   const go = page.getByRole('button', { name: 'Segment on Nebius' });
   await expect(go).toBeVisible({ timeout: 15_000 });
   await go.click();
-  await page.waitForFunction(() => window.scrub!.state.data?.meta.id !== 'upload' && window.scrub!.state.data?.meta.kind === 'liver', null, { timeout: 30_000 });
+  await page.waitForFunction((x) => window.scrub!.state.data?.meta.id === x, id, { timeout: 30_000 });
   await expect(page.locator('.scanjob')).toBeHidden();
   expect(await page.evaluate(() => window.scrub!.state.response)).toBe('Scan segmented on Nebius: VISTA-3D took 4.2 seconds. Planning is on.');
 });
