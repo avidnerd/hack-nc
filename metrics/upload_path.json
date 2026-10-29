@@ -1,0 +1,50 @@
+{
+  "base": "http://localhost:5173/",
+  "ct": "liver_30.nii.gz",
+  "at": "2026-10-29T19:46:51.276Z",
+  "stages": [
+    {
+      "stage": "liver_30.nii.gz, 64 MB",
+      "at_s": 0.043,
+      "shown": "liver_30.nii.gz, 64 MB"
+    },
+    {
+      "stage": "UPLOADED",
+      "at_s": 23.307,
+      "shown": "UPLOADED · 23 s"
+    },
+    {
+      "stage": "SEGMENTING",
+      "at_s": 337.282,
+      "shown": "SEGMENTING · job running · 336 s"
+    },
+    {
+      "stage": "CENTERLINE",
+      "at_s": 344.318,
+      "shown": "CENTERLINE · job running · 344 s"
+    },
+    {
+      "stage": "READY",
+      "at_s": 362.39,
+      "shown": "READY · 362 s from upload · NVIDIA H100 80GB HBM3"
+    }
+  ],
+  "ready_s": 366.404,
+  "meta": {
+    "id": "upload_136306b6181c",
+    "kind": "liver",
+    "labels": [
+      "Liver",
+      "Tumour",
+      "Inferior vena cava",
+      "Portal vein",
+      "Aorta",
+      "Left kidney",
+      "Right kidney",
+      "Hepatic vessel"
+    ]
+  },
+  "reply": "Scan segmented on Nebius: VISTA-3D took 5.0 seconds. Planning is on.",
+  "optimize": "Optimized. FLR 41.6 %, margin 20 mm, 0 vessels crossed.",
+  "problems": []
+}

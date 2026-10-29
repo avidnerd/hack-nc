@@ -1,6 +1,6 @@
 /**
  * "What's this?" on the vista3d-point endpoint, as a judge does it with the
- * mouse: alt-click the liver (a structure the case labels), then a point in
+ * mouse: alt-click the centre of the screen (a structure the case labels), then a point in
  * unlabelled tissue beside it (voxel 170,230,60 of the liver case), which
  * VISTA-3D adds as a new teal structure.
  *
@@ -41,8 +41,8 @@ try {
   // The health probe runs at boot; give it a moment.
   await page.waitForTimeout(1500);
 
-  // Alt-click the middle of the screen: the liver fills it in the opening view.
-  await step('alt-click the liver', async () => {
+  // Alt-click the middle of the screen: whatever labelled structure is under it.
+  await step('alt-click the centre of the screen', async () => {
     await page.keyboard.down('Alt');
     await page.mouse.click(720, 450);
     await page.keyboard.up('Alt');

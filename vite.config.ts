@@ -19,6 +19,7 @@ export default defineConfig({
       '/api/grounding': 'http://localhost:8787',
       '/api/rules': 'http://localhost:8787',
       '/api/scans': 'http://localhost:8787',
+      '/api/segment-point': 'http://localhost:8787',
     },
   },
   build: { target: 'es2022', assetsInlineLimit: 0 },

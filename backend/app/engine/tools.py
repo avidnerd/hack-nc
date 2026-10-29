@@ -429,7 +429,8 @@ def resect(s: Session, _: dict[str, Any]) -> dict[str, Any]:
 
 
 def segment_point(s: Session, _: dict[str, Any]) -> dict[str, Any]:
-    return {"error": "unavailable", "reason": "VISTA-3D point segmentation is not wired yet (M2)"}
+    # The offline engine (eval, data generation) has no VISTA-3D endpoint; the app calls vista3d-point.
+    return {"error": "unavailable", "reason": "segmentation service not configured"}
 
 
 def lookup_device_rules(s: Session, a: dict[str, Any]) -> dict[str, Any]:

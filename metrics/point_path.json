@@ -1,0 +1,21 @@
+{
+  "base": "http://localhost:5173/",
+  "at": "2026-10-29T19:49:38.645Z",
+  "steps": [
+    {
+      "label": "alt-click the liver",
+      "reply": "That is the aorta: 80.7 milliliters, VISTA-3D on Nebius.",
+      "ms": 2608
+    },
+    {
+      "label": "what is this at voxel 170,230,60",
+      "reply": "Stomach, VISTA-3D: 106.2 milliliters. Segmented by VISTA-3D on Nebius in 0.6 seconds.",
+      "ms": 2730
+    },
+    {
+      "label": "new structures",
+      "reply": "Stomach, VISTA-3D"
+    }
+  ],
+  "problems": []
+}

@@ -75,7 +75,7 @@ function materialFor(key: string, label: LabelDef | undefined, kind: string): TH
   }
   if (key.startsWith('vista_')) {
     // Found by a VISTA-3D point prompt: the teal, lit a little from within.
-    return new THREE.MeshPhysicalMaterial({ color: c, emissive: 0x0b3a36, roughness: 0.35, clearcoat: 0.6 });
+    return new THREE.MeshPhysicalMaterial({ color: c, emissive: 0x13a89c, emissiveIntensity: 0.55, roughness: 0.35, clearcoat: 0.6 });
   }
   if (label?.role === 'vessel') {
     return new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.25, clearcoat: 0.9, clearcoatRoughness: 0.15 });

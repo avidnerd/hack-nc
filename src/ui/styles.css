@@ -1502,3 +1502,12 @@ body.dropping::after {
 .scanjob-actions button[hidden] {
   display: none;
 }
+/* Short windows: the stage list must not push the buttons off screen. */
+.scanjob {
+  padding-top: min(14vh, 96px);
+  overflow-y: auto;
+}
+.scanjob .palette-card {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}

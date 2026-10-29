@@ -409,7 +409,7 @@
         },
         {
           "error": "unavailable",
-          "reason": "VISTA-3D point segmentation is not wired yet (M2)"
+          "reason": "segmentation service not configured"
         },
         {
           "case_id": "liver",

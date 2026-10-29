@@ -55,7 +55,7 @@ if [ -n "${NEBIUS_SA_KEY_FILE:-}" ] && [ -f "$NEBIUS_SA_KEY_FILE" ]; then
   SECRETS+=(--env-secret "AWS_ACCESS_KEY_ID=$SECRET" --env-secret "AWS_SECRET_ACCESS_KEY=$SECRET" --env-secret "NEBIUS_SA_KEY_JSON=$SECRET")
 fi
 OUT=$(mktemp)
-nebius ai endpoint create --parent-id "$PROJECT" --name scrub-backend \
+nebius ai endpoint create --parent-id "$PROJECT" --name "scrub-backend-$(date +%m%d-%H%M)" \
   --image python:3.11-slim \
   --inject-file backend/bootstrap.sh:/srv/boot.sh \
   --container-command bash --args "/srv/boot.sh $REPO $SHA" \
