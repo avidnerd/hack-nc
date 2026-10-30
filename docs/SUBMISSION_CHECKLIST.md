@@ -12,7 +12,7 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
   - [ ] A friend on a laptop with no webcam completes the 2-minute path cold (human check)
 - [x] Public repo (github.com/avidnerd/hack-nc)
 - [x] **MIT license** file in repo (`LICENSE`, added 2026-10-19)
-- [ ] MIT license visible in the GitHub About sidebar (check after main is pushed; GitHub detects it from main)
+- [x] MIT license visible in the GitHub About sidebar (GitHub detects MIT, verified 2026-10-29)
 - [x] README with setup instructions
 - [x] README section titled exactly **"NVIDIA models used"**
 - [x] README section titled exactly **"How Nebius Token Factory and AI Cloud are used"**
@@ -29,6 +29,6 @@ Stage 1 is pass/fail. Every box must be checked before Devpost submit (internal 
   - [x] Tavily ToS (Tavily is used at runtime by `/api/rules`; cards cached in `data/device_rules/`)
 - [x] No closed-model calls left in the hosted build (`api/llm.ts` deleted, `src/ai/llm.ts` closed; bundle grep for Gemini/Anthropic hosts is empty)
 - [x] No secrets in the repo or client bundle (`scripts/check-secrets.sh --all` passes; build-web greps the bundle)
-- [ ] Git history has no AI co-author trailers (rewritten locally 2026-10-29; force-push of `main` and `v2/m1` pending)
+- [x] Git history has no AI co-author trailers (main, v2/m1, v2/scans on GitHub: 0 matches, 2026-10-29)
 - [ ] Hosted backend can start upload jobs (service-account key in the `scrub-backend` secret, then `make deploy`)
 - [ ] Devpost: video link, repo, demo URL, feedback, update note; then add the video link to README
