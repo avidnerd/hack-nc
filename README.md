@@ -24,6 +24,8 @@ Mouse: drag to rotate, shift-drag to move the cut plane, scroll to zoom, click t
 
 **Your own scan:** click **Upload CT** and choose a `.nii.gz`. It opens in the browser first. If it has no labels, **Segment on Nebius** sends it to a VISTA-3D Serverless Job and shows the job's real stages (UPLOADED, SEGMENTING, CENTERLINE, READY) until the planned case opens.
 
+**GPU and backend status.** To keep costs at zero between recording and judging, the Nebius endpoints are stopped. The hosted app then runs every command above on its built-in command grammar and the same geometry engine, so every number is still computed, not generated. The Nemotron agent, "what's this?" and **Segment on Nebius** need the endpoints. The video shows them running, and [docs/OPERATIONS.md](docs/OPERATIONS.md) has the commands to start them.
+
 This path runs cold against production in our scripted check (`node scripts/judge-path.mjs`, results in `metrics/judge_path.json`).
 
 ## Results

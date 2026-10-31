@@ -1738,6 +1738,11 @@ export function dispatchIntent(intent: Intent, source: 'key' | 'voice' | 'llm'):
     case 'writePlan':
       writePlan();
       break;
+
+    // The resect tool without the agent: same card and numbers.
+    case 'resect':
+      void executeTool('resect', {}).then((r) => say(typeof r.error === 'string' ? `Can't resect: ${r.error}.` : templateReply([{ name: 'resect', result: r }])));
+      break;
   }
 }
 

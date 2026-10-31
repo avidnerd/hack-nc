@@ -268,3 +268,15 @@ describe('what is this', () => {
     expect(parseIntent("what's this margin")?.kind).not.toBe('whatsThis');
   });
 });
+
+describe('without the agent backend', () => {
+  it('resect is a command', () => {
+    for (const t of ['resect', 'resect it', 'resect the tumor']) expect(parseIntent(t)).toEqual({ kind: 'resect' });
+  });
+  it('optimize with a margin is a search, not a described cut', () => {
+    expect(parseIntent('optimize the cut with a 10 mm margin')).toMatchObject({ kind: 'optimize', marginMm: 10 });
+  });
+  it('a described cut still is one', () => {
+    expect(parseIntent('make a cut 15 mm from the tumor')?.kind).toBe('cut');
+  });
+});

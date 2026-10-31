@@ -48,6 +48,7 @@ export type Intent =
   | { kind: 'loadCase'; id: string }
   /** "What's this?": a VISTA-3D point prompt where the pointer is. */
   | { kind: 'whatsThis' }
+  | { kind: 'resect' }
   | { kind: 'nudgeStent'; mm: number }
   | { kind: 'plane'; on: boolean }
   /**
@@ -302,6 +303,7 @@ export function parseIntent(text: string): Intent | null {
     return { kind: 'confirm' };
   }
   if (/^(what'?s|what is) (this|that|here)$|^(segment|identify|label) (this|that|here|it)$/.test(s)) return { kind: 'whatsThis' };
+  if (/^(resect|resect (it|that|this|the (tumou?r|liver|cut))|do the resection|remove (it|the tumou?r))$/.test(s)) return { kind: 'resect' };
   if (/\b(tutorial|practi[cs]e|teach me|how do i use|show me how)\b/.test(s)) return { kind: 'tutorial' };
   if (/\b(compare|comparison|versus|difference between)\b/.test(s)) return { kind: 'comparePlan' };
   // Undo is about the cut first (an optimize, a "do it"); with nothing to
@@ -431,7 +433,7 @@ export function parseIntent(text: string): Intent | null {
         return { kind: 'cut', orientation: 'oblique', through: named[0], offsetMm: null, between: named[1] };
       }
       const describing = /\b(make|place|put|give me|cut|create|draw|add|do|start with|try|want|need|show)\b/.test(s);
-      if (/\boblique\b/.test(s) || (describing && mm !== null && /\b(from|off|away|clear|around|margin|beside)\b/.test(s))) {
+      if (/\boblique\b/.test(s) || (describing && !/\boptimi[sz]e\b/.test(s) && mm !== null && /\b(from|off|away|clear|around|margin|beside)\b/.test(s))) {
         return { kind: 'cut', orientation: 'oblique', through: named[0] ?? null, offsetMm: mm };
       }
     }
